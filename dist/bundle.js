@@ -2988,8 +2988,6 @@ function render(component, parent)
 
     parent.appendChild(DOMElement);
 }
-
-
 ;// CONCATENATED MODULE: ./src/js/dom/component/index.js
 
 
@@ -3121,7 +3119,6 @@ class Fragment extends Component
 
 /* harmony default export */ const component = ((/* unused pure expression or super */ null && (Component)));
 ;// CONCATENATED MODULE: ./src/js/dom/index.js
-
 
 
 

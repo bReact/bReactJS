@@ -1,7 +1,7 @@
 import { createDomElement } from '../dom';
 import { createElement } from '../vdom';
 
-function render(component, parent)
+export function render(component, parent)
 {        
     let vnode = createElement(component);
 
@@ -9,5 +9,3 @@ function render(component, parent)
 
     parent.appendChild(DOMElement);
 }
-
-export { render };

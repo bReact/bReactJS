@@ -1,9 +1,6 @@
-import { render }  from './render';
-import { Component, Fragment } from './component';
-import { createElement } from './vdom';
+export { render }  from './render';
+export { Component, Fragment } from './component';
 export {
-	render,
-	Component,
-	Fragment,
-	createElement
-};
+	createElement,
+	createElement as h,
+} from './vdom';

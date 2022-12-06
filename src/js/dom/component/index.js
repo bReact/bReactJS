@@ -1,6 +1,28 @@
 import { updateThunk } from '../vdom/thunk';
 import _ from '../utils';
 
+const _Component = function(props, context)
+{
+    this.context = { current: null };
+
+    this.props = !_.is_object(props) ? {} : props;
+
+    this.__internals = {
+        vnode : null,
+        prevProps :
+    };
+    
+
+    return this;
+}
+
+_Component.prototype = {};
+
+_Component.prototype.setState = function(key, value)
+{
+    return this._validateForm();
+};
+
 /**
  * Base component
  * 
@@ -58,13 +80,14 @@ export class Component
      */
     constructor(props)
     {
-        this.props = !_.is_object(props) ? {} : props;
+        return new _Component(props, this.defaultProps);
     }
 
     setState(key, value)
     {
-        let newState  = {};
+        let newState = {};
 
+        // setState({ 'foo.bar' : 'foo' })
         if (arguments.length === 1)
         {
             if (!_.is_object(key))

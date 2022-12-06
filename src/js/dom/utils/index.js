@@ -770,7 +770,6 @@ export function cloneDeep(mixed_var, context)
     const symbolTag  = '[object Symbol]'
     const weakMapTag = '[object WeakMap]'*/
 
-
     if (is_object(mixed_var))
     {
         return cloneObj(mixed_var);
@@ -786,6 +785,7 @@ export function cloneDeep(mixed_var, context)
     else if (is_number(mixed_var))
     {
         let r = mixed_var;
+
         return r;
     }
     else if (is_null(mixed_var))
@@ -810,7 +810,6 @@ export function cloneDeep(mixed_var, context)
     return r;
 }
 
-
 /**
  * Deep merge two objects.
  * 
@@ -823,17 +822,18 @@ export function mergeDeep(target, ...sources)
     
     const source = sources.shift();
 
-    if (isObject(target) && isObject(source))
+    if (is_object(target) && is_object(source))
     {
         for (const key in source)
         {
-            if (isObject(source[key]))
+            if (is_object(source[key]))
             {
                 if (!target[key]) Object.assign(target,
                 {
                     [key]:
                     {}
                 });
+
                 mergeDeep(target[key], source[key]);
             }
             else
@@ -864,7 +864,7 @@ export function mapStrict(arrayOrObj, callback, context)
 {
     context = typeof context === 'undefined' ? arrayOrObj : context;
 
-    if (Object.prototype.toString.call(arrayOrObj) === '[object Array]')
+    if (is_array(arrayOrObj))
     {
         var ret = [];
 
@@ -958,8 +958,6 @@ export function mapObjectArr(object, callback, context)
 
 /**
  * Join object.
- * 
- * return undefined to break loop, true to keep, false to reject
  * 
  * @param [{Array}|{Objet}] arrayOrObj Object or array
  * @param {Function}        callback   Callback
