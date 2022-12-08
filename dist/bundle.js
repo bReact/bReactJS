@@ -480,7 +480,7 @@ function is_class(mixed_var, classname)
     {
         if (typeof mixed_var === 'function')
         {
-            let re = new RegExp('^\\s*class\\s+(' + classname + '|\\w+\\s+extends\\s+' + classname + ')', 'i');
+            let re = new RegExp('^\\s*class\\s+(' + classname + '(\\s+|\\{)|\\w+\\s+extends\\s+' + classname + ')', 'i');
 
             return re.test(mixed_var.toString());
         }
@@ -514,7 +514,7 @@ function callable_name(mixed_var)
 }
 
 /**
- * Check if two vars are equal
+ * Gets variable size 
  * 
  * @param  mixed mixed_var Variable to test
  * @return bool
@@ -539,6 +539,42 @@ function size(mixed_var)
     }
 
     return 1;
+}
+
+/**
+ * Check if two vars are equal
+ * 
+ * @param  mixed mixed_var Variable to test
+ * @return bool
+ */
+function bool(mixed_var)
+{
+    mixed_var = (typeof mixed_var === 'undefined' ? false : mixed_var);
+
+    if (typeof mixed_var === 'boolean')
+    {
+        return mixed_var;
+    }
+
+    if (typeof mixed_var === 'number')
+    {
+        return mixed_var > 0;
+    }
+
+    if (typeof mixed_var === 'string')
+    {
+        mixed_var = mixed_var.toLowerCase().trim();
+
+        if (mixed_var === 'false') return false;
+        if (mixed_var === 'true') return true;
+        if (mixed_var === 'on') return true;
+        if (mixed_var === 'off') return false;
+        if (mixed_var === 'undefined') return false;
+        if (is_numeric(mixed_var)) return Number(mixed_var) > 0;
+        if (mixed_var === '') return false;
+    }
+
+    return false;
 }
 
 /**
@@ -580,14 +616,34 @@ function is_string(mixed_var)
 }
 
 /**
- * Is string
+ * Is number
  * 
  * @param  mixed mixed_var Variable to test
  * @return bool
  */
 function is_number(mixed_var)
 {
-    return typeof mixed_var === 'number';
+    return typeof mixed_var === 'number' && !isNaN(mixed_var);
+}
+
+/**
+ * Is string
+ * 
+ * @param  mixed mixed_var Variable to test
+ * @return bool
+ */
+function is_numeric(mixed_var)
+{
+    if (is_number(mixed_var))
+    {
+        return true;
+    }
+    else if (is_string(mixed_var))
+    {
+        return /^-?\d+$/.test(mixed_var.trim());
+    }
+
+    return false;
 }
 
 /**
@@ -1014,6 +1070,7 @@ const utils_ = {
     array_delete,
     dotify,
     size,
+    bool,
     cloneDeep,
     in_dom,
     is_equal,
@@ -1051,7 +1108,7 @@ const utils_ = {
  * ])
  */
 function createElement(tag, props, ...children)
-{    
+{        
     if (arguments.length === 0)
     {
         return createEmptyElement();
@@ -1232,7 +1289,7 @@ function createEmptyElement(key)
  */
 
 function createThunkElement(fn, props, children, key, ref)
-{    
+{
     let _type = utils.is_class(fn, 'Fragment') ? 'fragment' : 'thunk';
 
     return {
@@ -1246,28 +1303,6 @@ function createThunkElement(fn, props, children, key, ref)
             _domEl: null,
             _component: null,
             _name : utils.callable_name(fn),
-            _path: '',
-        }
-    }
-}
-
-/**
- * Lazily-rendered virtual nodes
- */
-
-function createFunctionThunk(fn, props, children, key, ref)
-{    
-    return {
-        type: 'thunkFunc',
-        fn,
-        children,
-        props,
-        key,
-        __internals:
-        {
-            _domEl: null,
-            _component: null,
-            _name : _.callable_name(fn),
             _path: '',
         }
     }
@@ -1296,7 +1331,7 @@ function patchVnode(left, right)
 
 let isMounted = (node) =>
 {
-    return _.in_dom(element_nodeElem(node));
+    return _.in_dom(nodeElem(node));
 }
 
 let isFragment = (node) =>
@@ -1399,7 +1434,7 @@ let nodePath = (node, path) =>
  * Get/set a nodes DOM element
  */
 
-let element_nodeElem = (node, elem) =>
+let nodeElem = (node, elem) =>
 {
     if (!utils.is_undefined(elem))
     {
@@ -1455,7 +1490,7 @@ let pointVnodeThunk = (vnode, component) =>
     if (component.props && component.props.children)
     {
         // Point .node.__internals._domEl -> component -> first nodeElement
-        element_nodeElem(vnode, findThunkDomEl(vnode));
+        nodeElem(vnode, findThunkDomEl(vnode));
 
         vnode.children = component.props.children;
     }
@@ -1530,7 +1565,7 @@ function findThunkDomEl(node)
         node = node.__internals._component.props.children[0];
     }
 
-    return element_nodeElem(node);
+    return nodeElem(node);
 }
 
 /**
@@ -2264,6 +2299,7 @@ function patchText(left, right, actions)
     }
 }
 
+// Replacing one node with another
 function replaceNode(left, right, actions)
 {        
     if (isThunk(right))
@@ -2277,7 +2313,6 @@ function replaceNode(left, right, actions)
             thunkInstantiate(right);
         }
     }
-
 
     actions.push(action('replaceNode', [left, right]));
 }
@@ -2514,18 +2549,13 @@ function patchSingleToMultiChildren(left, right, lChild, rChildren, actions)
     });
 
     // The old key doesn't exist
-    if (!rChild)
-    {
-        actions.push(action('removeChild', [left, lChild]));
-    }
-    else
+    if (rChild)
     {
         actions.push(action('moveToIndex', [left, lChild, newIndex]));
 
         patch(lChild, rChild, actions);
     }
 }
-
 
 function diffChildren(left, right, actions)
 {
@@ -2550,6 +2580,8 @@ function diffChildren(left, right, actions)
         return;
     }
 
+    let inserted = 0;
+
     // Loop right children
     // Note insertAtIndex & removeChild to be executed before moveToIndex
     // otherwise moveToIndex will be incorrect
@@ -2557,7 +2589,6 @@ function diffChildren(left, right, actions)
     // Also when moving multiple indexes, if a move has moves that run after it
     // that are being moved from before it to after it, that index will be incorrect
     // as the prior nodes have not been moved yet
-
     utils.foreach(rGroup, function(_key, entry)
     {
         let rIndex = entry.index;
@@ -2567,7 +2598,18 @@ function diffChildren(left, right, actions)
         // New node either by key or > index
         if (utils.is_undefined(lEntry))
         {
-            subActions.unshift(action('insertAtIndex', [left, rChild, rIndex]));
+            let _insert = action('insertAtIndex', [left, rChild, rIndex]);
+
+            if (!inserted)
+            {
+                subActions.unshift(_insert);
+            }
+            else
+            {
+                subActions.splice(inserted, 0, _insert);
+            }
+            
+            inserted++;
         }
         // Same key, check index
         else
@@ -2895,6 +2937,7 @@ function collectGarbage()
     for (var eventName in events)
     {
         var eventObj = events[eventName];
+        
         var i = eventObj.length;
 
         while (i--)
@@ -3121,7 +3164,7 @@ function setDomAttribute(DOMElement, name, value, previousValue)
                     case 'checked':
                     case 'disabled':
                     case 'selected':
-                        DOMElement[name] = value
+                        DOMElement[name] = utils.bool(value);
                         break;
                     case 'innerHTML':
                     case 'nodeValue':
@@ -3279,41 +3322,37 @@ function _ucfirst(string)
  * so they are treated like any other native element.
  */
 
-function createDomElement(vnode, path)
+function createDomElement(vnode, parentDOMElement)
 {        
-    path = typeof path === 'undefined' ? 'root' : path;
-
     switch (vnode.type)
     {
         case 'text':
-            return createTextNode(vnode, vnode.nodeValue, path);
+            return createTextNode(vnode, vnode.nodeValue);
         
         case 'empty':
-            return createTextNode(vnode, '', path);
+            return createTextNode(vnode, '');
         
         case 'thunk':
-            return createThunk(vnode, path);
+            return createThunk(vnode, parentDOMElement);
         
         case 'fragment':
-            return createFragment(vnode, path);
+            return createFragment(vnode, parentDOMElement);
         
         case 'native':
-            return createHTMLElement(vnode, path);
+            return createHTMLElement(vnode);
     }
 }
 
-function createTextNode(vnode, text, path)
+function createTextNode(vnode, text)
 {
     let DOMElement = document.createTextNode(text);
 
-    nodePath(vnode, path);
-
-    element_nodeElem(vnode, DOMElement);
+    nodeElem(vnode, DOMElement);
 
     return DOMElement;
 }
 
-function createHTMLElement(vnode, path)
+function createHTMLElement(vnode)
 {
     let { tagName, attributes, children } = vnode;
 
@@ -3324,17 +3363,19 @@ function createHTMLElement(vnode, path)
         setDomAttribute(DOMElement, prop, value);
     });
 
-    element_nodeElem(vnode, DOMElement);
-
-    nodePath(vnode, path);
+    nodeElem(vnode, DOMElement);
 
     utils.foreach(children, function(i, node)
     {
         if (!utils.is_empty(node))
         {            
-            let child = createDomElement(node, createPath(path, i));
-            
-            if (child)
+            let child = createDomElement(node, DOMElement);
+
+            if (utils.is_array(child))
+            {
+                mountFragment(DOMElement, child);
+            }
+            else
             {
                 DOMElement.appendChild(child);
             }
@@ -3344,18 +3385,33 @@ function createHTMLElement(vnode, path)
     return DOMElement;
 }
 
-function createThunk(vnode, path)
+/* Handles nested fragments */
+function mountFragment(DOMElement, children)
 {
-    let basePath = createPath(path, thunkName(vnode));
+    if (utils.is_htmlElement(children))
+    {
+        DOMElement.appendChild(children);
 
+        return;
+    }
+
+    if (utils.is_array(children))
+    {
+        utils.foreach(children, function(i, child)
+        {
+            mountFragment(DOMElement, child);
+        });
+    }
+}
+
+function createThunk(vnode, parentDOMElement)
+{
     // Skip this it's already been rendered if it's coming from a patch
     if (isThunkInstantiated(vnode))
     {
-        nodePath(vnode, basePath);
+        let DOMElement = createDomElement(vnode.children[0], parentDOMElement);
 
-        let DOMElement = createDomElement(vnode.children[0], basePath + '.0');
-
-        element_nodeElem(vnode, DOMElement);
+        nodeElem(vnode, DOMElement);
 
         return DOMElement;
     }
@@ -3364,46 +3420,27 @@ function createThunk(vnode, path)
 
     let component = thunkInstantiate(vnode);
 
-    nodePath(vnode, basePath);
-
     pointVnodeThunk(vnode, component);
 
-    let DOMElement = createDomElement(vnode.children[0], basePath + '.0');
+    let DOMElement = createDomElement(vnode.children[0], parentDOMElement);
 
-    element_nodeElem(vnode, DOMElement);
+    nodeElem(vnode, DOMElement);
 
     return DOMElement;
 }
 
-function createFragment(vnode, path)
-{
-    /*let { fn, props, key } = vnode;
+function createFragment(vnode, parentDOMElement)
+{    
+    nodeElem(vnode, parentDOMElement);
 
-    let component = _.is_class(fn) ? new fn(props) : fn(props);
+    let ret = [];
 
-    let basePath = createPath(path, key, thunkName(vnode));
-
-    render(component);
-
-    vnode['children'] = component.props.children;
-
-    let children = [];
-
-    _.foreach(component.props.children, function(i, node)
+    utils.foreach(vnode.children, function(i, node)
     {
-        let childPath = createPath(path, node.key || index);
-            
-        let child = createDomElement(node, childPath)
-        
-        DOMElement.appendChild(child);
+        ret.push(createDomElement(node, parentDOMElement));
     });
 
-    return children;*/
-}
-
-function create_findThunkDomEl(vnode)
-{
-    return nodeElem(vnode);
+    return ret;
 }
 
 ;// CONCATENATED MODULE: ./src/js/dom/dom/commit.js
@@ -3429,7 +3466,7 @@ function replaceText(vnode, text)
 {
     vnode.nodeValue = text;
 
-    element_nodeElem(vnode).nodeValue = text;
+    nodeElem(vnode).nodeValue = text;
 }
 
 function commit_replaceNode(left, right)
@@ -3441,7 +3478,7 @@ function commit_replaceNode(left, right)
     // todo fix path
     let DOMElement = createDomElement(right, nodePath(left));
 
-    let lDOMElement = element_nodeElem(left);
+    let lDOMElement = nodeElem(left);
 
     lDOMElement.parentNode.replaceChild(DOMElement, lDOMElement);
 
@@ -3456,7 +3493,7 @@ function appendChild(parentVnode, vnode)
 
     let DOMElement = createDomElement(vnode, basePath + '.' + index);
 
-    element_nodeElem(parentVnode).appendChild(DOMElement);
+    nodeElem(parentVnode).appendChild(DOMElement);
 
     parentVnode.children.push(vnode);
 }
@@ -3477,7 +3514,7 @@ function removeChild(parentVnode, vnode)
         }
     });
 
-    element_nodeElem(parentVnode).removeChild(element_nodeElem(vnode));
+    nodeElem(parentVnode).removeChild(nodeElem(vnode));
 }
 
 function removeEvents(vnode)
@@ -3494,7 +3531,7 @@ function removeEvents(vnode)
     }
     else if (isNative(vnode))
     {
-        let DOMElement = element_nodeElem(vnode);
+        let DOMElement = nodeElem(vnode);
 
         if (DOMElement)
         {
@@ -3509,9 +3546,7 @@ function removeEvents(vnode)
             });
         }
     }
-
 }
-
 
 function insertAtIndex(parentVnode, vnode, index)
 {
@@ -3522,7 +3557,7 @@ function insertAtIndex(parentVnode, vnode, index)
 
     let DOMElement = createDomElement(vnode, path);
 
-    let parentDOMElement = element_nodeElem(parentVnode);
+    let parentDOMElement = nodeElem(parentVnode);
 
     if (index >= parentDOMElement.children.length)
     {
@@ -3538,7 +3573,7 @@ function insertAtIndex(parentVnode, vnode, index)
 
 function moveToIndex(parentVnode, vnode, index)
 {
-    let DOMElement       = element_nodeElem(vnode);
+    let DOMElement       = nodeElem(vnode);
     let parentDOMElement = DOMElement.parentNode;
     let currIndex        = Array.prototype.slice.call(parentDOMElement.children).indexOf(DOMElement);
 
@@ -3579,12 +3614,12 @@ function moveToIndex(parentVnode, vnode, index)
 
 function setAttribute(vnode, name, value, previousValue)
 {
-    setDomAttribute(element_nodeElem(vnode), name, value, previousValue);
+    setDomAttribute(nodeElem(vnode), name, value, previousValue);
 }
 
 function removeAttribute(vnode, name, previousValue)
 {
-    removeDomAttribute(element_nodeElem(vnode), name, previousValue)
+    removeDomAttribute(nodeElem(vnode), name, previousValue)
 }
 
 ;// CONCATENATED MODULE: ./src/js/dom/dom/index.js
@@ -3594,13 +3629,44 @@ function removeAttribute(vnode, name, previousValue)
 
 
 
+
 function render(component, parent)
 {        
     let vnode = createElement(component);
 
-    let DOMElement = createDomElement(vnode);
+    let DOMElement = createDomElement(vnode, parent);
 
-    parent.appendChild(DOMElement);
+    mount(DOMElement, parent);
+
+    console.log(vnode);
+}
+
+function mount(DOMElement, parent)
+{        
+    console.log(DOMElement);
+
+    // Edge case where root renders a fragment
+    if (utils.is_array(DOMElement))
+    {
+        utils.foreach(DOMElement, function(i, childDomElement)
+        {
+            if (utils.is_array(childDomElement))
+            {
+                mount(childDomElement, parent);
+            }
+            else
+            {
+                parent.appendChild(childDomElement);
+            }
+        });
+
+        return;
+    }
+
+    if (utils.is_htmlElement(DOMElement))
+    {
+        parent.appendChild(DOMElement);
+    }
 }
 ;// CONCATENATED MODULE: ./src/js/dom/component/index.js
 
@@ -3845,7 +3911,18 @@ class Fragment extends Component
         {
             console.log('rending FragmentTest');
 
-            return ``;
+            return `
+                <Fragment>
+                    <li>f 1.</li>
+                    <li>f 2.</li>
+                    <Fragment>
+                        <li>f 3.</li>
+                        <li>f 4.</li>
+                    </Fragment>
+                    <li>f 5.</li>
+                    <li>f 6.</li>
+                </Fragment>
+            `;
         }
     }
 
@@ -3883,16 +3960,16 @@ class Fragment extends Component
 
             console.log('Constructing Foo')
 
-            setInterval(function()
+            /*setInterval(function()
             {
                 _this.tick();
 
-            }, 1000);
+            }, 1000);*/
         }
 
         tick()
         {
-            if (this.state.counter === 2)
+            if (this.state.counter === 3)
             {
                 return;
             }
@@ -3922,7 +3999,7 @@ class Fragment extends Component
         {
             console.log('rending Foo');
 
-           /* if (this.state.counter === 2)
+          /*  if (this.state.counter === 2)
             {
                 return `
                     <ul>
@@ -3936,31 +4013,27 @@ class Fragment extends Component
                     <li>li 1</li>
                     <li>li 2</li>
                 </ul>
-            `;
-*/
+            `;*/
 
-            if (this.state.counter === 2)
-            {
-                return `
-                   <section>
-                        <div>1.div</div>
-                        <Bar key="test" testprop={this.state.counter} otherprop="foobar" />
-                        <i>foo</i>
-                        <span key="span">4.span</span>
-                        <div onClick={this.handler}>3. div</div>
-                    </section>
-                `;
 
-            }
+        
 
          return `
-            <section>
-                <div onClick={this.handler} style={this.styles1}>1.div</div>
-                <i>2.i</i>
-                <Bar key="test" testprop={this.state.counter} otherprop="foobar" />
-                <div style={this.styles2}>3. div</div>
-                <span key="span">4.span</span>
-            </section>
+            <div>
+                <li>1.</li>
+                <li>2.</li>
+                <FragmentTest />
+                <Fragment>
+                    <li>3.</li>
+                    <li>4.</li>
+                    <Fragment>
+                        <li>5.</li>
+                        <li>6.</li>
+                    </Fragment>
+                    <li>7.</li>
+                    <li>8.</li>
+                </Fragment>
+            </div>
             `;
             
         }
@@ -3974,10 +4047,14 @@ class Fragment extends Component
     };
 
 
-    const TestFunc = (props) =>
+    /*const TestFunc = (props) =>
     {
-        return `<div>{this.props.name}</div>`;
-    };
+        console.log(this);
+
+        let name = 'test';
+
+        return `<div>hello world{this.name}</div>`;
+    };*/
 
     render(Foo, document.getElementById('app'));
 

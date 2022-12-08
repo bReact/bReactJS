@@ -450,7 +450,7 @@ export function is_class(mixed_var, classname)
     {
         if (typeof mixed_var === 'function')
         {
-            let re = new RegExp('^\\s*class\\s+(' + classname + '|\\w+\\s+extends\\s+' + classname + ')', 'i');
+            let re = new RegExp('^\\s*class\\s+(' + classname + '(\\s+|\\{)|\\w+\\s+extends\\s+' + classname + ')', 'i');
 
             return re.test(mixed_var.toString());
         }
@@ -484,7 +484,7 @@ export function callable_name(mixed_var)
 }
 
 /**
- * Check if two vars are equal
+ * Gets variable size 
  * 
  * @param  mixed mixed_var Variable to test
  * @return bool
@@ -509,6 +509,42 @@ export function size(mixed_var)
     }
 
     return 1;
+}
+
+/**
+ * Check if two vars are equal
+ * 
+ * @param  mixed mixed_var Variable to test
+ * @return bool
+ */
+export function bool(mixed_var)
+{
+    mixed_var = (typeof mixed_var === 'undefined' ? false : mixed_var);
+
+    if (typeof mixed_var === 'boolean')
+    {
+        return mixed_var;
+    }
+
+    if (typeof mixed_var === 'number')
+    {
+        return mixed_var > 0;
+    }
+
+    if (typeof mixed_var === 'string')
+    {
+        mixed_var = mixed_var.toLowerCase().trim();
+
+        if (mixed_var === 'false') return false;
+        if (mixed_var === 'true') return true;
+        if (mixed_var === 'on') return true;
+        if (mixed_var === 'off') return false;
+        if (mixed_var === 'undefined') return false;
+        if (is_numeric(mixed_var)) return Number(mixed_var) > 0;
+        if (mixed_var === '') return false;
+    }
+
+    return false;
 }
 
 /**
@@ -550,14 +586,34 @@ export function is_string(mixed_var)
 }
 
 /**
- * Is string
+ * Is number
  * 
  * @param  mixed mixed_var Variable to test
  * @return bool
  */
 export function is_number(mixed_var)
 {
-    return typeof mixed_var === 'number';
+    return typeof mixed_var === 'number' && !isNaN(mixed_var);
+}
+
+/**
+ * Is string
+ * 
+ * @param  mixed mixed_var Variable to test
+ * @return bool
+ */
+export function is_numeric(mixed_var)
+{
+    if (is_number(mixed_var))
+    {
+        return true;
+    }
+    else if (is_string(mixed_var))
+    {
+        return /^-?\d+$/.test(mixed_var.trim());
+    }
+
+    return false;
 }
 
 /**
@@ -984,6 +1040,7 @@ const _ = {
     array_delete,
     dotify,
     size,
+    bool,
     cloneDeep,
     in_dom,
     is_equal,

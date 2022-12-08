@@ -90,7 +90,18 @@ import { render, Component, createElement, Fragment } from './dom';
         {
             console.log('rending FragmentTest');
 
-            return ``;
+            return `
+                <Fragment>
+                    <li>f 1.</li>
+                    <li>f 2.</li>
+                    <Fragment>
+                        <li>f 3.</li>
+                        <li>f 4.</li>
+                    </Fragment>
+                    <li>f 5.</li>
+                    <li>f 6.</li>
+                </Fragment>
+            `;
         }
     }
 
@@ -128,16 +139,16 @@ import { render, Component, createElement, Fragment } from './dom';
 
             console.log('Constructing Foo')
 
-            setInterval(function()
+            /*setInterval(function()
             {
                 _this.tick();
 
-            }, 1000);
+            }, 1000);*/
         }
 
         tick()
         {
-            if (this.state.counter === 2)
+            if (this.state.counter === 3)
             {
                 return;
             }
@@ -167,7 +178,7 @@ import { render, Component, createElement, Fragment } from './dom';
         {
             console.log('rending Foo');
 
-           /* if (this.state.counter === 2)
+          /*  if (this.state.counter === 2)
             {
                 return `
                     <ul>
@@ -181,31 +192,27 @@ import { render, Component, createElement, Fragment } from './dom';
                     <li>li 1</li>
                     <li>li 2</li>
                 </ul>
-            `;
-*/
+            `;*/
 
-            if (this.state.counter === 2)
-            {
-                return `
-                   <section>
-                        <div>1.div</div>
-                        <Bar key="test" testprop={this.state.counter} otherprop="foobar" />
-                        <i>foo</i>
-                        <span key="span">4.span</span>
-                        <div onClick={this.handler}>3. div</div>
-                    </section>
-                `;
 
-            }
+        
 
          return `
-            <section>
-                <div onClick={this.handler} style={this.styles1}>1.div</div>
-                <i>2.i</i>
-                <Bar key="test" testprop={this.state.counter} otherprop="foobar" />
-                <div style={this.styles2}>3. div</div>
-                <span key="span">4.span</span>
-            </section>
+            <div>
+                <li>1.</li>
+                <li>2.</li>
+                <FragmentTest />
+                <Fragment>
+                    <li>3.</li>
+                    <li>4.</li>
+                    <Fragment>
+                        <li>5.</li>
+                        <li>6.</li>
+                    </Fragment>
+                    <li>7.</li>
+                    <li>8.</li>
+                </Fragment>
+            </div>
             `;
             
         }
@@ -219,10 +226,14 @@ import { render, Component, createElement, Fragment } from './dom';
     };
 
 
-    const TestFunc = (props) =>
+    /*const TestFunc = (props) =>
     {
-        return `<div>{this.props.name}</div>`;
-    };
+        console.log(this);
+
+        let name = 'test';
+
+        return `<div>hello world{this.name}</div>`;
+    };*/
 
     render(Foo, document.getElementById('app'));
 

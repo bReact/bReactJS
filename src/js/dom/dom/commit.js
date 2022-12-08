@@ -100,9 +100,7 @@ function removeEvents(vnode)
             });
         }
     }
-
 }
-
 
 export function insertAtIndex(parentVnode, vnode, index)
 {

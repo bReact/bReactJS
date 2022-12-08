@@ -13,7 +13,7 @@ import _ from '../utils';
  * ])
  */
 export function createElement(tag, props, ...children)
-{    
+{        
     if (arguments.length === 0)
     {
         return createEmptyElement();
@@ -194,33 +194,11 @@ function createEmptyElement(key)
  */
 
 function createThunkElement(fn, props, children, key, ref)
-{    
+{
     let _type = _.is_class(fn, 'Fragment') ? 'fragment' : 'thunk';
 
     return {
         type: _type,
-        fn,
-        children,
-        props,
-        key,
-        __internals:
-        {
-            _domEl: null,
-            _component: null,
-            _name : _.callable_name(fn),
-            _path: '',
-        }
-    }
-}
-
-/**
- * Lazily-rendered virtual nodes
- */
-
-function createFunctionThunk(fn, props, children, key, ref)
-{    
-    return {
-        type: 'thunkFunc',
         fn,
         children,
         props,

@@ -106,7 +106,7 @@ export function setDomAttribute(DOMElement, name, value, previousValue)
                     case 'checked':
                     case 'disabled':
                     case 'selected':
-                        DOMElement[name] = value
+                        DOMElement[name] = _.bool(value);
                         break;
                     case 'innerHTML':
                     case 'nodeValue':

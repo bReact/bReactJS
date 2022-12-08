@@ -150,6 +150,7 @@ export function collectGarbage()
     for (var eventName in events)
     {
         var eventObj = events[eventName];
+        
         var i = eventObj.length;
 
         while (i--)

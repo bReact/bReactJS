@@ -55,6 +55,7 @@ function patchText(left, right, actions)
     }
 }
 
+// Replacing one node with another
 function replaceNode(left, right, actions)
 {        
     if (vElem.isThunk(right))
@@ -68,7 +69,6 @@ function replaceNode(left, right, actions)
             thunk.thunkInstantiate(right);
         }
     }
-
 
     actions.push(action('replaceNode', [left, right]));
 }
@@ -305,18 +305,13 @@ function patchSingleToMultiChildren(left, right, lChild, rChildren, actions)
     });
 
     // The old key doesn't exist
-    if (!rChild)
-    {
-        actions.push(action('removeChild', [left, lChild]));
-    }
-    else
+    if (rChild)
     {
         actions.push(action('moveToIndex', [left, lChild, newIndex]));
 
         patch(lChild, rChild, actions);
     }
 }
-
 
 function diffChildren(left, right, actions)
 {
@@ -341,6 +336,8 @@ function diffChildren(left, right, actions)
         return;
     }
 
+    let inserted = 0;
+
     // Loop right children
     // Note insertAtIndex & removeChild to be executed before moveToIndex
     // otherwise moveToIndex will be incorrect
@@ -348,7 +345,6 @@ function diffChildren(left, right, actions)
     // Also when moving multiple indexes, if a move has moves that run after it
     // that are being moved from before it to after it, that index will be incorrect
     // as the prior nodes have not been moved yet
-
     _.foreach(rGroup, function(_key, entry)
     {
         let rIndex = entry.index;
@@ -358,7 +354,18 @@ function diffChildren(left, right, actions)
         // New node either by key or > index
         if (_.is_undefined(lEntry))
         {
-            subActions.unshift(action('insertAtIndex', [left, rChild, rIndex]));
+            let _insert = action('insertAtIndex', [left, rChild, rIndex]);
+
+            if (!inserted)
+            {
+                subActions.unshift(_insert);
+            }
+            else
+            {
+                subActions.splice(inserted, 0, _insert);
+            }
+            
+            inserted++;
         }
         // Same key, check index
         else

@@ -1,5 +1,5 @@
 import createNativeElement from './factory';
-import { createPath, thunkName, isMounted, componentNode, pointVnodeThunk, isThunk, nodeElem, nodePath, thunkInstantiate, isThunkInstantiated } from '../vdom';
+import * as vDOM from '../vdom';
 import { setDomAttribute } from './attributes';
 import _ from '../utils';
 
@@ -9,41 +9,37 @@ import _ from '../utils';
  * so they are treated like any other native element.
  */
 
-export function createDomElement(vnode, path)
+export function createDomElement(vnode, parentDOMElement)
 {        
-    path = typeof path === 'undefined' ? 'root' : path;
-
     switch (vnode.type)
     {
         case 'text':
-            return createTextNode(vnode, vnode.nodeValue, path);
+            return createTextNode(vnode, vnode.nodeValue);
         
         case 'empty':
-            return createTextNode(vnode, '', path);
+            return createTextNode(vnode, '');
         
         case 'thunk':
-            return createThunk(vnode, path);
+            return createThunk(vnode, parentDOMElement);
         
         case 'fragment':
-            return createFragment(vnode, path);
+            return createFragment(vnode, parentDOMElement);
         
         case 'native':
-            return createHTMLElement(vnode, path);
+            return createHTMLElement(vnode);
     }
 }
 
-function createTextNode(vnode, text, path)
+function createTextNode(vnode, text)
 {
     let DOMElement = document.createTextNode(text);
 
-    nodePath(vnode, path);
-
-    nodeElem(vnode, DOMElement);
+    vDOM.nodeElem(vnode, DOMElement);
 
     return DOMElement;
 }
 
-function createHTMLElement(vnode, path)
+function createHTMLElement(vnode)
 {
     let { tagName, attributes, children } = vnode;
 
@@ -54,17 +50,19 @@ function createHTMLElement(vnode, path)
         setDomAttribute(DOMElement, prop, value);
     });
 
-    nodeElem(vnode, DOMElement);
-
-    nodePath(vnode, path);
+    vDOM.nodeElem(vnode, DOMElement);
 
     _.foreach(children, function(i, node)
     {
         if (!_.is_empty(node))
         {            
-            let child = createDomElement(node, createPath(path, i));
-            
-            if (child)
+            let child = createDomElement(node, DOMElement);
+
+            if (_.is_array(child))
+            {
+                mountFragment(DOMElement, child);
+            }
+            else
             {
                 DOMElement.appendChild(child);
             }
@@ -74,64 +72,60 @@ function createHTMLElement(vnode, path)
     return DOMElement;
 }
 
-function createThunk(vnode, path)
+/* Handles nested fragments */
+function mountFragment(DOMElement, children)
 {
-    let basePath = createPath(path, thunkName(vnode));
-
-    // Skip this it's already been rendered if it's coming from a patch
-    if (isThunkInstantiated(vnode))
+    if (_.is_htmlElement(children))
     {
-        nodePath(vnode, basePath);
+        DOMElement.appendChild(children);
 
-        let DOMElement = createDomElement(vnode.children[0], basePath + '.0');
+        return;
+    }
 
-        nodeElem(vnode, DOMElement);
+    if (_.is_array(children))
+    {
+        _.foreach(children, function(i, child)
+        {
+            mountFragment(DOMElement, child);
+        });
+    }
+}
+
+function createThunk(vnode, parentDOMElement)
+{
+    // Skip this it's already been rendered if it's coming from a patch
+    if (vDOM.isThunkInstantiated(vnode))
+    {
+        let DOMElement = createDomElement(vnode.children[0], parentDOMElement);
+
+        vDOM.nodeElem(vnode, DOMElement);
 
         return DOMElement;
     }
 
     let { fn, props } = vnode;
 
-    let component = thunkInstantiate(vnode);
+    let component = vDOM.thunkInstantiate(vnode);
 
-    nodePath(vnode, basePath);
+    vDOM.pointVnodeThunk(vnode, component);
 
-    pointVnodeThunk(vnode, component);
+    let DOMElement = createDomElement(vnode.children[0], parentDOMElement);
 
-    let DOMElement = createDomElement(vnode.children[0], basePath + '.0');
-
-    nodeElem(vnode, DOMElement);
+    vDOM.nodeElem(vnode, DOMElement);
 
     return DOMElement;
 }
 
-function createFragment(vnode, path)
-{
-    /*let { fn, props, key } = vnode;
+function createFragment(vnode, parentDOMElement)
+{    
+    vDOM.nodeElem(vnode, parentDOMElement);
 
-    let component = _.is_class(fn) ? new fn(props) : fn(props);
+    let ret = [];
 
-    let basePath = createPath(path, key, thunkName(vnode));
-
-    render(component);
-
-    vnode['children'] = component.props.children;
-
-    let children = [];
-
-    _.foreach(component.props.children, function(i, node)
+    _.foreach(vnode.children, function(i, node)
     {
-        let childPath = createPath(path, node.key || index);
-            
-        let child = createDomElement(node, childPath)
-        
-        DOMElement.appendChild(child);
+        ret.push(createDomElement(node, parentDOMElement));
     });
 
-    return children;*/
-}
-
-function findThunkDomEl(vnode)
-{
-    return nodeElem(vnode);
+    return ret;
 }
