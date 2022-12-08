@@ -1,27 +1,6 @@
 import { action } from './actions';
-import {
-    patchVnode,
-    isMounted,
-    isFragment,
-    isThunk,
-    isNative,
-    isText,
-    isEmpty,
-    noChildren,
-    singleChild,
-    isSameThunk,
-    isThunkInstantiated,
-    isSameFragment,
-    createPath,
-    prevPath,
-    thunkName,
-    nodePath,
-    nodeElem,
-    nodeComponent,
-    pointVnodeThunk,
-    emptyChildren
-} from './element';
-import { instantiateThunk, rerenderThunk, unmount } from './thunk';
+import * as vElem from '../vdom';
+import * as thunk from './thunk';
 import _ from '../utils';
 
 /**
@@ -36,7 +15,7 @@ export function patch(prevNode, nextNode, actions)
         // nothing to do
     }
     // Replace empty -> empty, empty -> something (excludes thunks which need to be rendered)
-    else if (((!isEmpty(prevNode) && isEmpty(nextNode) || isEmpty(prevNode) && !isEmpty(nextNode))) && nextNode.type !== 'thunk')
+    else if (((!vElem.isEmpty(prevNode) && vElem.isEmpty(nextNode) || vElem.isEmpty(prevNode) && !vElem.isEmpty(nextNode))) && nextNode.type !== 'thunk')
     {
         replaceNode(prevNode, nextNode, actions);
     }
@@ -44,23 +23,23 @@ export function patch(prevNode, nextNode, actions)
     {
         replaceNode(prevNode, nextNode, actions);
     }
-    else if (isNative(nextNode))
+    else if (vElem.isNative(nextNode))
     {
         patchNative(prevNode, nextNode, actions);
     }
-    else if (isText(nextNode))
+    else if (vElem.isText(nextNode))
     {
         patchText(prevNode, nextNode, actions);
     }
-    else if (isThunk(nextNode))
+    else if (vElem.isThunk(nextNode))
     {
         patchThunk(prevNode, nextNode, actions);
     }
-    else if (isFragment(nextNode))
+    else if (vElem.isFragment(nextNode))
     {
         patchFragment(prevNode, nextNode, actions);
     }
-    else if (isEmpty(nextNode))
+    else if (vElem.isEmpty(nextNode))
     {
         // nothing to do
     }
@@ -78,17 +57,18 @@ function patchText(left, right, actions)
 
 function replaceNode(left, right, actions)
 {        
-    if (isThunk(right))
+    if (vElem.isThunk(right))
     {
-        if (isThunkInstantiated(right))
+        if (vElem.isThunkInstantiated(right))
         {
             throw new Error('Thunk should not be instantiated.');
         }
         else
         {
-            instantiateThunk(right);
+            thunk.thunkInstantiate(right);
         }
     }
+
 
     actions.push(action('replaceNode', [left, right]));
 }
@@ -107,26 +87,40 @@ function patchNative(left, right, actions)
     }
 }
 
+function patchThunkProps(vnode, newProps)
+{    
+    let component = vElem.nodeComponent(vnode);
+
+    component.__internals.prevProps = _.cloneDeep(vnode.props);
+
+    component.props = newProps;
+
+    vnode.props = newProps;
+}
+
+function diffThunk(left, right, actions)
+{    
+    let component  = vElem.nodeComponent(left);
+    let leftChild  = left.children[0];
+    let rightchild = thunk.thunkRender(component);
+    right.children = [rightchild];
+
+    patchChildren(left, right, actions);
+}
+
 function patchThunk(left, right, actions)
 {        
     // Same component 
-    if (isSameThunk(left, right))
-    {
-        // Props need to be applied to the component here
-        let component     = nodeComponent(left);
-        let prevProps     = component.props;
-        let newProps      = right.props;
-        let leftChild     = left.children[0];
-        component.props   = newProps;
-        let rightchild    = rerenderThunk(component);
-        right.children = [rightchild];
+    if (vElem.isSameThunk(left, right))
+    {        
+        patchThunkProps(left, right.props);
 
-        patchChildren(left, right, actions);
+        diffThunk(left, right, actions);
     }
     // Different components
     else
     {
-        instantiateThunk(right);
+        thunk.thunkInstantiate(right);
 
         actions.push(action('replaceNode', [left, right]));
     }
@@ -167,25 +161,25 @@ function patchChildren(left, right, actions)
     let rChildren = right.children;
 
     // Quick check
-    if (noChildren(left) && noChildren(right))
+    if (vElem.noChildren(left) && vElem.noChildren(right))
     {
         return;
     }
 
     // We're only adding new children
-    if (noChildren(left))
+    if (vElem.noChildren(left))
     {
         // Clear the children now
         left.children = [];
 
         // Only need to add a single child
-        if (singleChild(right))
+        if (vElem.singleChild(right))
         {
             actions.push(action('appendChild', [left, rChildren[0]]));
         }
 
         // We're adding multiple new children
-        else if (!noChildren(right))
+        else if (!vElem.noChildren(right))
         {
             _.foreach(rChildren, function(i, child)
             {
@@ -194,16 +188,16 @@ function patchChildren(left, right, actions)
         }
     }
     // There's only a single child in previous tree
-    else if (singleChild(left))
+    else if (vElem.singleChild(left))
     {        
         // Both have a single node
-        if (singleChild(right))
+        if (vElem.singleChild(right))
         {                    
             // left and right could be the same / different type, so we need to patch them
             patch(lChildren[0], rChildren[0], actions);
         }
         // We're only removing the left node, nothing to insert
-        else if (noChildren(right))
+        else if (vElem.noChildren(right))
         {
             // Replace empty with empty
             actions.push(action('replaceNode', [lChildren[0], rChildren[0]]));
@@ -234,7 +228,7 @@ function patchChildren(left, right, actions)
     else
     {
         // Removing all children except one
-        if (singleChild(right))
+        if (vElem.singleChild(right))
         {
             let matchedKey = false;
 
@@ -258,7 +252,7 @@ function patchChildren(left, right, actions)
             }
         }
         // We're only removing children
-        else if (noChildren(right))
+        else if (vElem.noChildren(right))
         {
             // When there are no child nodes in the new children
             _.foreach(left.children, function(i, child)
@@ -411,8 +405,8 @@ function diffChildren(left, right, actions)
 
 function diffAttributes(left, right, actions)
 {
-    let pAttrs  = left.attributes;
-    let nAttrs  = right.attributes;
+    let pAttrs = left.attributes;
+    let nAttrs = right.attributes;
 
     // No changes
     if (_.is_empty(pAttrs) && _.is_empty(nAttrs))
@@ -424,15 +418,18 @@ function diffAttributes(left, right, actions)
     {
         if (!_.is_equal(value, pAttrs[prop]))
         {
-            actions.push(action('setAttribute', [left, prop, value]));
+            actions.push(action('setAttribute', [left, prop, value, pAttrs[prop]]));
         }
     });
 
     _.foreach(pAttrs, function(prop, value)
     {
-        if (!(name in nAttrs))
+        if (!(prop in nAttrs))
         {
-            actions.push(action('removeAttribute', [left, prop, value]));
+            actions.push(action('removeAttribute', [left, prop, pAttrs[prop]]));
         }
     });
+
+    // Patch in new attributes
+    vElem.nodeAttributes(left, nAttrs);
 }

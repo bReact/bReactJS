@@ -4,12 +4,7 @@ import { commit } from '../dom';
 import { patch } from './patch';
 import _ from '../utils';
 
-export function rerenderThunk(component)
-{
-    return jsxFactory(component);
-}
-
-export function instantiateThunk(vnode)
+export function thunkInstantiate(vnode)
 {
     let component = nodeComponent(vnode);
 
@@ -27,7 +22,7 @@ export function instantiateThunk(vnode)
     return component;
 }
 
-export function updateThunk(vnode)
+export function thunkUpdate(vnode)
 {
     let component = vnode.__internals._component;
     let left      = vnode.children[0];
@@ -38,6 +33,11 @@ export function updateThunk(vnode)
     {
         commit(actions.current);
     }
+}
+
+export function thunkRender(component)
+{
+    return jsxFactory(component);
 }
 
 function tree(left, right)

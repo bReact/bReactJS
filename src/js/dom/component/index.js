@@ -1,27 +1,5 @@
-import { updateThunk } from '../vdom/thunk';
+import { thunkUpdate } from '../vdom';
 import _ from '../utils';
-
-const _Component = function(props, context)
-{
-    this.context = { current: null };
-
-    this.props = !_.is_object(props) ? {} : props;
-
-    this.__internals = {
-        vnode : null,
-        prevProps :
-    };
-    
-
-    return this;
-}
-
-_Component.prototype = {};
-
-_Component.prototype.setState = function(key, value)
-{
-    return this._validateForm();
-};
 
 /**
  * Base component
@@ -75,47 +53,62 @@ export class Component
     defaultProps = {};
 
     /**
+     * Internal use
+     *
+     * @var {object}
+     */
+    __internals = 
+    {
+        vnode     : null,
+        prevState : {},
+        prevProps : {},
+    };
+
+    /**
      * Constructor
      *
      */
     constructor(props)
     {
-        return new _Component(props, this.defaultProps);
+        this.props = !_.is_object(props) ? {} : props;
     }
 
-    setState(key, value)
+    setState(key, value, callback)
     {
-        let newState = {};
+        if (!_.is_object(this.state))
+        {
+            this.state = {};
+        }
+
+        let stateChanges = {};
 
         // setState({ 'foo.bar' : 'foo' })
         if (arguments.length === 1)
         {
             if (!_.is_object(key))
             {
-                throw new Error('State must be an object.');
+                throw new Error('StateError: State should be an object with [dot.notation] keys. e.g. [setState({"foo.bar" : "baz"})]');
             }
 
-            newState = key;
+            stateChanges = key;
         }
         else
         {
-            newState[key] = value;
+            stateChanges[key] = value;
         }
 
-        newState = _.dotify(newState);
+        this.__internals.prevState = _.cloneDeep(this.state);
 
-        if (_.is_callable(this.componentWillUpdate))
-        {
-            //this.componentWillUpdate(this.props, newState);
-        }
-
-        _.foreach(newState, function(key, value)
+        _.foreach(stateChanges, function(key, value)
         {
             _.array_set(key, value, this.state);
             
         }, this);
 
-        updateThunk(this._vnode);
+        if (!_.is_equal(this.state, this.__internals.prevState))
+        {
+            thunkUpdate(this.__internals.vnode);
+        }
     }
 
     getState(key)
@@ -132,7 +125,7 @@ export class Component
 
     forceUpdate()
     {
-        update(this);
+        thunkUpdate(this.__internals.vnode);
     }
 }
 

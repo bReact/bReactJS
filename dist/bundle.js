@@ -693,7 +693,7 @@ function is_equal(a, b)
     {
         return a === b;
     }
-    else if (is_array(a) || is_object(mixed_var))
+    else if (is_array(a) || is_object(b))
     {
         if (a === b)
         {
@@ -800,7 +800,6 @@ function cloneDeep(mixed_var, context)
     const symbolTag  = '[object Symbol]'
     const weakMapTag = '[object WeakMap]'*/
 
-
     if (is_object(mixed_var))
     {
         return cloneObj(mixed_var);
@@ -816,6 +815,7 @@ function cloneDeep(mixed_var, context)
     else if (is_number(mixed_var))
     {
         let r = mixed_var;
+
         return r;
     }
     else if (is_null(mixed_var))
@@ -840,7 +840,6 @@ function cloneDeep(mixed_var, context)
     return r;
 }
 
-
 /**
  * Deep merge two objects.
  * 
@@ -853,17 +852,18 @@ function mergeDeep(target, ...sources)
     
     const source = sources.shift();
 
-    if (isObject(target) && isObject(source))
+    if (is_object(target) && is_object(source))
     {
         for (const key in source)
         {
-            if (isObject(source[key]))
+            if (is_object(source[key]))
             {
                 if (!target[key]) Object.assign(target,
                 {
                     [key]:
                     {}
                 });
+
                 mergeDeep(target[key], source[key]);
             }
             else
@@ -894,7 +894,7 @@ function mapStrict(arrayOrObj, callback, context)
 {
     context = typeof context === 'undefined' ? arrayOrObj : context;
 
-    if (Object.prototype.toString.call(arrayOrObj) === '[object Array]')
+    if (is_array(arrayOrObj))
     {
         var ret = [];
 
@@ -988,8 +988,6 @@ function mapObjectArr(object, callback, context)
 
 /**
  * Join object.
- * 
- * return undefined to break loop, true to keep, false to reject
  * 
  * @param [{Array}|{Objet}] arrayOrObj Object or array
  * @param {Function}        callback   Callback
@@ -1116,6 +1114,7 @@ function createElement(tag, props, ...children)
         {
             _domEl: null,
             _path: '',
+            _prevAttrs: '',
         }
     }
 }
@@ -1247,6 +1246,28 @@ function createThunkElement(fn, props, children, key, ref)
             _domEl: null,
             _component: null,
             _name : utils.callable_name(fn),
+            _path: '',
+        }
+    }
+}
+
+/**
+ * Lazily-rendered virtual nodes
+ */
+
+function createFunctionThunk(fn, props, children, key, ref)
+{    
+    return {
+        type: 'thunkFunc',
+        fn,
+        children,
+        props,
+        key,
+        __internals:
+        {
+            _domEl: null,
+            _component: null,
+            _name : _.callable_name(fn),
             _path: '',
         }
     }
@@ -1389,6 +1410,22 @@ let element_nodeElem = (node, elem) =>
 }
 
 /**
+ * Get/set a nodes DOM element
+ */
+
+let nodeAttributes = (node, attrs) =>
+{
+    if (!utils.is_undefined(attrs))
+    {
+        node.__internals._prevAttrs = node.attributes;
+
+        node.attributes = attrs;
+    }
+
+    return node.attributes;
+}
+
+/**
  * Get/set a nodes component
  */
 
@@ -1412,7 +1449,7 @@ let pointVnodeThunk = (vnode, component) =>
     vnode.__internals._component = component;
 
     // point component -> vnode
-    component._vnode = vnode;
+    component.__internals.vnode = vnode;
 
     // Point vnode.children -> component.props.children
     if (component.props && component.props.children)
@@ -1446,7 +1483,7 @@ function patchVnodes(left, right)
  * in a sub tree
  */
 
-let thunkWillMount = (vnode) =>
+let nodeWillMount = (vnode) =>
 {
     
 }
@@ -2237,9 +2274,10 @@ function replaceNode(left, right, actions)
         }
         else
         {
-            instantiateThunk(right);
+            thunkInstantiate(right);
         }
     }
+
 
     actions.push(action('replaceNode', [left, right]));
 }
@@ -2258,26 +2296,40 @@ function patchNative(left, right, actions)
     }
 }
 
+function patchThunkProps(vnode, newProps)
+{    
+    let component = nodeComponent(vnode);
+
+    component.__internals.prevProps = utils.cloneDeep(vnode.props);
+
+    component.props = newProps;
+
+    vnode.props = newProps;
+}
+
+function diffThunk(left, right, actions)
+{    
+    let component  = nodeComponent(left);
+    let leftChild  = left.children[0];
+    let rightchild = thunkRender(component);
+    right.children = [rightchild];
+
+    patchChildren(left, right, actions);
+}
+
 function patchThunk(left, right, actions)
 {        
     // Same component 
     if (isSameThunk(left, right))
-    {
-        // Props need to be applied to the component here
-        let component     = nodeComponent(left);
-        let prevProps     = component.props;
-        let newProps      = right.props;
-        let leftChild     = left.children[0];
-        component.props   = newProps;
-        let rightchild    = rerenderThunk(component);
-        right.children = [rightchild];
+    {        
+        patchThunkProps(left, right.props);
 
-        patchChildren(left, right, actions);
+        diffThunk(left, right, actions);
     }
     // Different components
     else
     {
-        instantiateThunk(right);
+        thunkInstantiate(right);
 
         actions.push(action('replaceNode', [left, right]));
     }
@@ -2562,8 +2614,8 @@ function diffChildren(left, right, actions)
 
 function diffAttributes(left, right, actions)
 {
-    let pAttrs  = left.attributes;
-    let nAttrs  = right.attributes;
+    let pAttrs = left.attributes;
+    let nAttrs = right.attributes;
 
     // No changes
     if (utils.is_empty(pAttrs) && utils.is_empty(nAttrs))
@@ -2575,17 +2627,20 @@ function diffAttributes(left, right, actions)
     {
         if (!utils.is_equal(value, pAttrs[prop]))
         {
-            actions.push(action('setAttribute', [left, prop, value]));
+            actions.push(action('setAttribute', [left, prop, value, pAttrs[prop]]));
         }
     });
 
     utils.foreach(pAttrs, function(prop, value)
     {
-        if (!(name in nAttrs))
+        if (!(prop in nAttrs))
         {
-            actions.push(action('removeAttribute', [left, prop, value]));
+            actions.push(action('removeAttribute', [left, prop, pAttrs[prop]]));
         }
     });
+
+    // Patch in new attributes
+    nodeAttributes(left, nAttrs);
 }
 
 ;// CONCATENATED MODULE: ./src/js/dom/vdom/thunk.js
@@ -2595,12 +2650,7 @@ function diffAttributes(left, right, actions)
 
 
 
-function rerenderThunk(component)
-{
-    return jsxFactory(component);
-}
-
-function instantiateThunk(vnode)
+function thunkInstantiate(vnode)
 {
     let component = nodeComponent(vnode);
 
@@ -2618,7 +2668,7 @@ function instantiateThunk(vnode)
     return component;
 }
 
-function updateThunk(vnode)
+function thunkUpdate(vnode)
 {
     let component = vnode.__internals._component;
     let left      = vnode.children[0];
@@ -2629,6 +2679,11 @@ function updateThunk(vnode)
     {
         commit(actions.current);
     }
+}
+
+function thunkRender(component)
+{
+    return jsxFactory(component);
 }
 
 function tree(left, right)
@@ -2687,13 +2742,531 @@ function thunk_renderContext(component)
 
 
 
+;// CONCATENATED MODULE: ./src/js/dom/dom/events.js
 
 
-;// CONCATENATED MODULE: ./src/js/dom/dom/attributes.js
-function attributes_attributes(DOMElement, leftAtts, rightAtts)
+const _events = {};
+
+/**
+ * Add an event listener
+ *
+ * @access public
+ * @param  node    element    The target DOM node
+ * @param  string  eventName  Event type
+ * @param  closure handler    Callback event
+ * @param  bool    useCapture Use capture (optional) (defaul false)
+ */
+function addEventListener(element, eventName, handler, useCapture)
 {
+    // Boolean use capture defaults to false
+    useCapture = typeof useCapture === 'undefined' ? false : Boolean(useCapture);
+
+    // Class event storage
+    var events = _events;
+
+    // Make sure events are set
+    if (!events)
+    {
+        _events = events = {};
+    }
+
+    // Make sure an array for the event type exists
+    if (!events[eventName])
+    {
+        events[eventName] = [];
+    }
+
+    // Arrays
+    if (Array.isArray(element))
+    {
+        for (var i = 0; i < element.length; i++)
+        {
+            addEventListener(element[i], eventName, handler, useCapture);
+        }
+    }
+    else
+    {
+        // Push the details to the events object
+        events[eventName].push(
+        {
+            element: element,
+            handler: handler,
+            useCapture: useCapture,
+        });
+
+        _addListener(element, eventName, handler, useCapture);
+    }
+}
+
+/**
+ * Removes event listeners on a DOM node
+ *
+ * If no event name is given, all attached event listeners are removed.
+ * If no callback is given, all callbacks for the event type will be removed.
+ * This function can still remove "annonymous" functions that are given a name as they are declared.
+ * 
+ * @access public
+ * @param  node    element    The target DOM node
+ * @param  string  eventName  Event type
+ * @param  closure handler    Callback event
+ * @param  bool    useCapture Use capture (optional) (defaul false)
+ */
+function removeEventListener(element, eventName, handler, useCapture)
+{
+    if (Array.isArray(element))
+    {
+        for (var j = 0; j < element.length; j++)
+        {
+            removeEventListener(element[j], eventName, handler, useCapture);
+        }
+    }
+    else
+    {
+        // If the eventName name was not provided - remove all event handlers on element
+        if (!eventName)
+        {
+            return _removeElementListeners(element);
+        }
+
+        // If the callback was not provided - remove all events of the type on the element
+        if (!handler)
+        {
+            return _removeElementTypeListeners(element, eventName);
+        }
+
+        // Default use capture
+        useCapture = typeof useCapture === 'undefined' ? false : Boolean(useCapture);
+
+        var eventObj = _events[eventName];
+
+        if (typeof eventObj === 'undefined')
+        {
+            return;
+        }
+
+        // Loop stored events and match node, event name, handler, use capture
+        for (var i = 0, len = eventObj.length; i < len; i++)
+        {
+            if (eventObj[i]['handler'] === handler && eventObj[i]['useCapture'] === useCapture && eventObj[i]['element'] === element)
+            {
+                _removeListener(element, eventName, handler, useCapture);
+
+                _events[eventName].splice(i, 1);
+
+                break;
+            }
+        }
+    }
+}
+
+/**
+ * Removes all event listeners registered by the library
+ *
+ * @access public
+ */
+function clearEventListeners()
+{
+    var events = _events;
+
+    for (var eventName in events)
+    {
+        var eventObj = events[eventName];
+
+        var i = eventObj.length;
+
+        while (i--)
+        {
+            _removeListener(eventObj[i]['element'], eventName, eventObj[i]['handler'], eventObj[i]['useCapture']);
+
+            _events[eventName].splice(i, 1);
+        }
+    }
+}
+
+/**
+ * Removes all event listeners registered by the library on nodes
+ * that are no longer part of the DOM tree
+ *
+ * @access public
+ */
+function collectGarbage()
+{
+    var events = _events;
+    for (var eventName in events)
+    {
+        var eventObj = events[eventName];
+        var i = eventObj.length;
+
+        while (i--)
+        {
+            var el = eventObj[i]['element'];
+
+            // the window, body, and document always exist so keep these listeners
+            if (el == window || el == document || el == document.body)
+            {
+                continue;
+            }
+            
+            if (!_.in_dom(el))
+            {
+                _removeListener(eventObj[i]['element'], eventName, eventObj[i]['handler'], eventObj[i]['useCapture']);
+                
+                _events[eventName].splice(i, 1);
+            }
+        }
+    }
+}
+
+/**
+ * Removes all registered event listners on an element
+ *
+ * @access private
+ * @param  node    element Target node element
+ */
+function _removeElementListeners(element)
+{
+    var events = _events;
+
+    for (var eventName in events)
+    {
+        var eventObj = events[eventName];
+
+        var i = eventObj.length;
+
+        while (i--)
+        {
+            if (eventObj[i]['element'] === element)
+            {
+                _removeListener(eventObj[i]['element'], eventName, eventObj[i]['handler'], eventObj[i]['useCapture']);
+                
+                _events[eventName].splice(i, 1);
+            }
+        }
+    }
+}
+
+/**
+ * Removes all registered event listners of a specific type on an element
+ *
+ * @access private
+ * @param  node    element Target node element
+ * @param  string  type    Event listener type
+ */
+function _removeElementTypeListeners(element, type)
+{
+    var eventObj = _events[type];
+
+    var i = eventObj.length;
+
+    while (i--)
+    {
+        if (eventObj[i]['element'] === element)
+        {
+            _removeListener(eventObj[i]['element'], type, eventObj[i]['handler'], eventObj[i]['useCapture']);
+            
+            _events[type].splice(i, 1);
+        }
+    }
+}
+
+/**
+ * Adds a listener to the element
+ *
+ * @access private
+ * @param  node    element    The target DOM node
+ * @param  string  eventName  Event type
+ * @param  closure handler    Callback event
+ * @param  bool    useCapture Use capture (optional) (defaul false)
+ */
+function _addListener(el, eventName, handler, useCapture)
+{
+    if (el.addEventListener)
+    {
+        el.addEventListener(eventName, handler, useCapture);
+    }
+    else
+    {
+        el.attachEvent('on' + eventName, handler, useCapture);
+    }
+}
+
+/**
+ * Removes a listener from the element
+ *
+ * @access private
+ * @param  node    element    The target DOM node
+ * @param  string  eventName  Event type
+ * @param  closure handler    Callback event
+ * @param  bool    useCapture Use capture (optional) (defaul false)
+ */
+function _removeListener(el, eventName, handler, useCapture)
+{
+    if (el.removeEventListener)
+    {
+        el.removeEventListener(eventName, handler, useCapture);
+    }
+    else
+    {
+        el.detachEvent('on' + eventName, handler, useCapture);
+    }
+}
+
+/* harmony default export */ const events = ({ addEventListener, removeEventListener, clearEventListeners, collectGarbage });
+;// CONCATENATED MODULE: ./src/js/dom/dom/attributes.js
+
+
+
+/**
+ * List of browser prefixes
+ *
+ * @var array
+ */
+const CSS_PREFIXES =
+[
+    'webkit',
+    'Moz',
+    'ms',
+    'O',
+];
+
+/**
+ * CSS PREFIXABLE
+ *
+ * @var array
+ */
+const CSS_PREFIXABLE =
+[
+    // transitions
+    'transition',
+    'transition-delay',
+    'transition-duration',
+    'transition-property',
+    'transition-timing-function',
+
+    // trnasforms
+    'transform',
+    'transform-origin',
+    'transform-style',
+    'perspective',
+    'perspective-origin',
+    'backface-visibility',
+
+    // misc
+    'box-sizing',
+    'calc',
+    'flex',
+];
+
+function setDomAttribute(DOMElement, name, value, previousValue)
+{    
+    switch (name)
+    {
+        // Style
+        case 'style':
+            
+            if (utils.is_empty(value))
+            {
+                // remove all styles completely
+                DOMElement.removeAttribute('style');
+            }
+            else if (utils.is_string(value))
+            {
+                // Clear style and overwrite
+                DOMElement.style = '';
+
+                // Apply current styles
+                utils.foreach(value.split(';'), function(i, rule)
+                {
+                    var style = rule.split(':');
+
+                    if (style.length >= 2)
+                    {
+                        css(DOMElement, style.shift().trim(), style.join(':').trim());
+                    }
+                });
+            }
+            else if (utils.is_object(value))
+            {
+                utils.foreach(value, function(prop, value)
+                {
+                    css(DOMElement, prop, value);
+                });
+            }
+            
+            break;
+        
+        // Class
+        case 'class':
+        case 'className':
+            DOMElement.className = value;
+            break;
+
+        // Events / attributes
+        default:
+            if (name[0] === 'o' && name[1] === 'n')
+            {
+                if (previousValue)
+                {
+                    removeEventListener(DOMElement, name.slice(2).toLowerCase(), previousValue);
+                }
+                if (value)
+                {
+                    addEventListener(DOMElement, name.slice(2).toLowerCase(), value);
+                }
+             }
+            else
+            {
+                switch (name)
+                {
+                    case 'checked':
+                    case 'disabled':
+                    case 'selected':
+                        DOMElement[name] = value
+                        break;
+                    case 'innerHTML':
+                    case 'nodeValue':
+                    case 'value':
+                        DOMElement[name] = value;
+                        break;
+                    default:
+                        DOMElement.removeAttribute(name)
+                        break;
+                }
+            }
+        break;
+    }
+}
+
+function removeDomAttribute(DOMElement, name, previousValue)
+{
+    switch (name)
+    {
+        // Class
+        case 'class':
+        case 'className':
+            DOMElement.className = '';
+            break;
+
+        // Events / attributes
+        default:
+            if (name[0] === 'o' && name[1] === 'n')
+            {
+                if (previousValue)
+                {       
+                    removeEventListener(DOMElement, name.slice(2).toLowerCase(), previousValue);
+                }
+            }
+            else
+            {
+                switch (name)
+                {
+                    case 'checked':
+                    case 'disabled':
+                    case 'selected':
+                        DOMElement[name] = false
+                        break
+                    case 'innerHTML':
+                    case 'nodeValue':
+                    case 'value':
+                        DOMElement[name] = ''
+                      break
+                    default:
+                        DOMElement.removeAttribute(name)
+                    break;
+                }
+            }
+        break;
+    }
 
 }
+
+/**
+ * Set CSS value(s) on element
+ *
+ * @access public
+ * @param  node   el     Target DOM node
+ * @param  string|object Assoc array of property->value or string property
+ * @example Helper.css(node, { display : 'none' });
+ * @example Helper.css(node, 'display', 'none');
+ */
+function css(el, property, value)
+{
+    // If their is no value and property is an object
+    if (utils.is_object(property))
+    {
+        utils.foreach(property, function(prop, val)
+        {
+            css(el, prop, val);
+        });
+    }
+    else
+    {
+        // vendor prefix the property if need be and convert to camelCase
+        var properties = _vendorPrefix(property);
+
+        // Loop vendored (if added) and unvendored properties and apply
+        utils.foreach(properties, function(i, prop)
+        {
+            el.style[prop] = value;
+        });
+    }
+}
+
+/**
+ * Vendor prefix a css property and convert to camelCase
+ *
+ * @access private
+ * @param  string property The CSS base property
+ * @return array
+ */
+function _vendorPrefix(property)
+{
+    // Properties to return
+    var props = [];
+
+    // Convert to regular hyphenated property 
+    property = _camelCaseToHyphen(property);
+
+    // Is the property prefixable ?
+    if (CSS_PREFIXABLE.includes(property))
+    {
+        var prefixes = CSS_PREFIXES;
+
+        // Loop vendor prefixes
+        for (var i = 0; i < prefixes.length; i++)
+        {
+            props.push(prefixes[i] + _ucfirst(_toCamelCase(property)));
+        }
+    }
+
+    // Add non-prefixed property
+    props.push(_toCamelCase(property));
+
+    return props;
+}
+
+function _toCamelCase(str)
+{
+    return str.toLowerCase()
+        .replace(/['"]/g, '')
+        .replace(/\W+/g, ' ')
+        .replace(/ (.)/g, function($1)
+        {
+            return $1.toUpperCase();
+        })
+        .replace(/ /g, '');
+}
+
+function _camelCaseToHyphen(str)
+{
+    return str.replace(/([a-z])([A-Z])/g, '$1-$2').replace(/\b([A-Z]+)([A-Z])([a-z])/, '$1-$2$3').toLowerCase();
+}
+
+function _ucfirst(string)
+{
+    return (string + '').charAt(0).toUpperCase() + string.slice(1);
+}
+
 ;// CONCATENATED MODULE: ./src/js/dom/dom/create.js
 
 
@@ -2746,7 +3319,10 @@ function createHTMLElement(vnode, path)
 
     let DOMElement = createNativeElement(tagName);
 
-    attributes_attributes(attributes);
+    utils.foreach(attributes, function(prop, value)
+    {
+        setDomAttribute(DOMElement, prop, value);
+    });
 
     element_nodeElem(vnode, DOMElement);
 
@@ -2786,7 +3362,7 @@ function createThunk(vnode, path)
 
     let { fn, props } = vnode;
 
-    let component = instantiateThunk(vnode);
+    let component = thunkInstantiate(vnode);
 
     nodePath(vnode, basePath);
 
@@ -2835,6 +3411,8 @@ function create_findThunkDomEl(vnode)
 
 
 
+
+
 function commit(actions)
 {
     console.log(actions);
@@ -2857,6 +3435,8 @@ function replaceText(vnode, text)
 function commit_replaceNode(left, right)
 {
     nodeWillUnmount(left);
+
+    removeEvents(left);
 
     // todo fix path
     let DOMElement = createDomElement(right, nodePath(left));
@@ -2885,10 +3465,12 @@ function removeChild(parentVnode, vnode)
 {
     nodeWillUnmount(vnode);
 
+    removeEvents(vnode);
+
     utils.foreach(parentVnode.children, function(i, child)
     {
         if (child === vnode)
-        {
+        {            
             parentVnode.children.splice(i, 1);
 
             return false;
@@ -2897,6 +3479,39 @@ function removeChild(parentVnode, vnode)
 
     element_nodeElem(parentVnode).removeChild(element_nodeElem(vnode));
 }
+
+function removeEvents(vnode)
+{
+    if (isThunk(vnode) || isFragment(vnode))
+    {
+        if (!noChildren(vnode))
+        {
+            utils.foreach(vnode.children, function(i, child)
+            {
+                removeEvents(child);
+            });
+        }
+    }
+    else if (isNative(vnode))
+    {
+        let DOMElement = element_nodeElem(vnode);
+
+        if (DOMElement)
+        {
+            removeEventListener(DOMElement);
+        }
+
+        if (!noChildren(vnode))
+        {
+            utils.foreach(vnode.children, function(i, child)
+            {
+                removeEvents(child);
+            });
+        }
+    }
+
+}
+
 
 function insertAtIndex(parentVnode, vnode, index)
 {
@@ -2944,7 +3559,7 @@ function moveToIndex(parentVnode, vnode, index)
     }
     else
     {
-        parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[index + 1]);
+        parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[index]);
     }
 
     // Move vnode
@@ -2962,15 +3577,14 @@ function moveToIndex(parentVnode, vnode, index)
     }
 }
 
-function setAttribute(vnode, prop, value)
+function setAttribute(vnode, name, value, previousValue)
 {
-
+    setDomAttribute(element_nodeElem(vnode), name, value, previousValue);
 }
 
-function removeAttribute(vnode, prop, setAs)
+function removeAttribute(vnode, name, previousValue)
 {
-
-
+    removeDomAttribute(element_nodeElem(vnode), name, previousValue)
 }
 
 ;// CONCATENATED MODULE: ./src/js/dom/dom/index.js
@@ -3044,6 +3658,18 @@ class Component
     defaultProps = {};
 
     /**
+     * Internal use
+     *
+     * @var {object}
+     */
+    __internals = 
+    {
+        vnode     : null,
+        prevState : {},
+        prevProps : {},
+    };
+
+    /**
      * Constructor
      *
      */
@@ -3052,38 +3678,42 @@ class Component
         this.props = !utils.is_object(props) ? {} : props;
     }
 
-    setState(key, value)
+    setState(key, value, callback)
     {
-        let newState  = {};
+        if (!utils.is_object(this.state))
+        {
+            this.state = {};
+        }
 
+        let stateChanges = {};
+
+        // setState({ 'foo.bar' : 'foo' })
         if (arguments.length === 1)
         {
             if (!utils.is_object(key))
             {
-                throw new Error('State must be an object.');
+                throw new Error('StateError: State should be an object with [dot.notation] keys. e.g. [setState({"foo.bar" : "baz"})]');
             }
 
-            newState = key;
+            stateChanges = key;
         }
         else
         {
-            newState[key] = value;
+            stateChanges[key] = value;
         }
 
-        newState = utils.dotify(newState);
+        this.__internals.prevState = utils.cloneDeep(this.state);
 
-        if (utils.is_callable(this.componentWillUpdate))
-        {
-            //this.componentWillUpdate(this.props, newState);
-        }
-
-        utils.foreach(newState, function(key, value)
+        utils.foreach(stateChanges, function(key, value)
         {
             utils.array_set(key, value, this.state);
             
         }, this);
 
-        updateThunk(this._vnode);
+        if (!utils.is_equal(this.state, this.__internals.prevState))
+        {
+            thunkUpdate(this.__internals.vnode);
+        }
     }
 
     getState(key)
@@ -3100,7 +3730,7 @@ class Component
 
     forceUpdate()
     {
-        update(this);
+        thunkUpdate(this.__internals.vnode);
     }
 }
 
@@ -3238,6 +3868,16 @@ class Fragment extends Component
             this.FragmentTest = FragmentTest;
             this.Fragment     = Fragment;
             this.foo = null;
+            this.styles1      = {
+                color: 'white',
+                backgroundColor: 'red'
+            };
+            this.styles2 = 'color:white;backgroundColor:purple';
+            this.styles3      = {
+                color: 'black',
+                backgroundColor: 'yellow',
+                border: '1px solid black'
+            };
 
             var _this = this;
 
@@ -3282,7 +3922,7 @@ class Fragment extends Component
         {
             console.log('rending Foo');
 
-            if (this.state.counter === 2)
+           /* if (this.state.counter === 2)
             {
                 return `
                     <ul>
@@ -3297,29 +3937,30 @@ class Fragment extends Component
                     <li>li 2</li>
                 </ul>
             `;
-
-            
+*/
 
             if (this.state.counter === 2)
             {
                 return `
                    <section>
                         <div>1.div</div>
-                        <i>2.i</i>
-                        <Bar key="test" testprop={this.state.counter} />
-                        <div>3. div</div>
+                        <Bar key="test" testprop={this.state.counter} otherprop="foobar" />
+                        <i>foo</i>
                         <span key="span">4.span</span>
+                        <div onClick={this.handler}>3. div</div>
                     </section>
                 `;
 
             }
 
          return `
-               <section>
-                    <Bar key="test" testprop={this.state.counter}  />
-                    <span key="span" className="foobar">2. span</span>
-                    <div>3.div</div>
-                </section>
+            <section>
+                <div onClick={this.handler} style={this.styles1}>1.div</div>
+                <i>2.i</i>
+                <Bar key="test" testprop={this.state.counter} otherprop="foobar" />
+                <div style={this.styles2}>3. div</div>
+                <span key="span">4.span</span>
+            </section>
             `;
             
         }
@@ -3330,6 +3971,12 @@ class Fragment extends Component
         string: "foo", 
         number: 5,
         boolean: true
+    };
+
+
+    const TestFunc = (props) =>
+    {
+        return `<div>{this.props.name}</div>`;
     };
 
     render(Foo, document.getElementById('app'));

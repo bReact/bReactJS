@@ -1,6 +1,8 @@
 import _ from '../utils';
 import * as vDOM from '../vdom';
 import { createDomElement } from './create';
+import { setDomAttribute, removeDomAttribute } from './attributes';
+import * as events from './events';
 
 export function commit(actions)
 {
@@ -24,6 +26,8 @@ export function replaceText(vnode, text)
 export function replaceNode(left, right)
 {
     vDOM.nodeWillUnmount(left);
+
+    removeEvents(left);
 
     // todo fix path
     let DOMElement = createDomElement(right, vDOM.nodePath(left));
@@ -52,10 +56,12 @@ export function removeChild(parentVnode, vnode)
 {
     vDOM.nodeWillUnmount(vnode);
 
+    removeEvents(vnode);
+
     _.foreach(parentVnode.children, function(i, child)
     {
         if (child === vnode)
-        {
+        {            
             parentVnode.children.splice(i, 1);
 
             return false;
@@ -64,6 +70,39 @@ export function removeChild(parentVnode, vnode)
 
     vDOM.nodeElem(parentVnode).removeChild(vDOM.nodeElem(vnode));
 }
+
+function removeEvents(vnode)
+{
+    if (vDOM.isThunk(vnode) || vDOM.isFragment(vnode))
+    {
+        if (!vDOM.noChildren(vnode))
+        {
+            _.foreach(vnode.children, function(i, child)
+            {
+                removeEvents(child);
+            });
+        }
+    }
+    else if (vDOM.isNative(vnode))
+    {
+        let DOMElement = vDOM.nodeElem(vnode);
+
+        if (DOMElement)
+        {
+            events.removeEventListener(DOMElement);
+        }
+
+        if (!vDOM.noChildren(vnode))
+        {
+            _.foreach(vnode.children, function(i, child)
+            {
+                removeEvents(child);
+            });
+        }
+    }
+
+}
+
 
 export function insertAtIndex(parentVnode, vnode, index)
 {
@@ -111,7 +150,7 @@ export function moveToIndex(parentVnode, vnode, index)
     }
     else
     {
-        parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[index + 1]);
+        parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[index]);
     }
 
     // Move vnode
@@ -129,13 +168,12 @@ export function moveToIndex(parentVnode, vnode, index)
     }
 }
 
-export function setAttribute(vnode, prop, value)
+export function setAttribute(vnode, name, value, previousValue)
 {
-
+    setDomAttribute(vDOM.nodeElem(vnode), name, value, previousValue);
 }
 
-export function removeAttribute(vnode, prop, setAs)
+export function removeAttribute(vnode, name, previousValue)
 {
-
-
+    removeDomAttribute(vDOM.nodeElem(vnode), name, previousValue)
 }

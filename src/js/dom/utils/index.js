@@ -663,7 +663,7 @@ export function is_equal(a, b)
     {
         return a === b;
     }
-    else if (is_array(a) || is_object(mixed_var))
+    else if (is_array(a) || is_object(b))
     {
         if (a === b)
         {

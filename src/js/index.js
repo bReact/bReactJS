@@ -113,6 +113,16 @@ import { render, Component, createElement, Fragment } from './dom';
             this.FragmentTest = FragmentTest;
             this.Fragment     = Fragment;
             this.foo = null;
+            this.styles1      = {
+                color: 'white',
+                backgroundColor: 'red'
+            };
+            this.styles2 = 'color:white;backgroundColor:purple';
+            this.styles3      = {
+                color: 'black',
+                backgroundColor: 'yellow',
+                border: '1px solid black'
+            };
 
             var _this = this;
 
@@ -157,7 +167,7 @@ import { render, Component, createElement, Fragment } from './dom';
         {
             console.log('rending Foo');
 
-            if (this.state.counter === 2)
+           /* if (this.state.counter === 2)
             {
                 return `
                     <ul>
@@ -172,29 +182,30 @@ import { render, Component, createElement, Fragment } from './dom';
                     <li>li 2</li>
                 </ul>
             `;
-
-            
+*/
 
             if (this.state.counter === 2)
             {
                 return `
                    <section>
                         <div>1.div</div>
-                        <i>2.i</i>
-                        <Bar key="test" testprop={this.state.counter} />
-                        <div>3. div</div>
+                        <Bar key="test" testprop={this.state.counter} otherprop="foobar" />
+                        <i>foo</i>
                         <span key="span">4.span</span>
+                        <div onClick={this.handler}>3. div</div>
                     </section>
                 `;
 
             }
 
          return `
-               <section>
-                    <Bar key="test" testprop={this.state.counter}  />
-                    <span key="span" className="foobar">2. span</span>
-                    <div>3.div</div>
-                </section>
+            <section>
+                <div onClick={this.handler} style={this.styles1}>1.div</div>
+                <i>2.i</i>
+                <Bar key="test" testprop={this.state.counter} otherprop="foobar" />
+                <div style={this.styles2}>3. div</div>
+                <span key="span">4.span</span>
+            </section>
             `;
             
         }
@@ -205,6 +216,12 @@ import { render, Component, createElement, Fragment } from './dom';
         string: "foo", 
         number: 5,
         boolean: true
+    };
+
+
+    const TestFunc = (props) =>
+    {
+        return `<div>{this.props.name}</div>`;
     };
 
     render(Foo, document.getElementById('app'));

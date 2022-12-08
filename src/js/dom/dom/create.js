@@ -1,6 +1,6 @@
 import createNativeElement from './factory';
-import { createPath, thunkName, isMounted, componentNode, pointVnodeThunk, isThunk, nodeElem, nodePath, instantiateThunk, isThunkInstantiated } from '../vdom';
-import {attributes as setAttributes} from './attributes';
+import { createPath, thunkName, isMounted, componentNode, pointVnodeThunk, isThunk, nodeElem, nodePath, thunkInstantiate, isThunkInstantiated } from '../vdom';
+import { setDomAttribute } from './attributes';
 import _ from '../utils';
 
 /**
@@ -49,7 +49,10 @@ function createHTMLElement(vnode, path)
 
     let DOMElement = createNativeElement(tagName);
 
-    setAttributes(attributes);
+    _.foreach(attributes, function(prop, value)
+    {
+        setDomAttribute(DOMElement, prop, value);
+    });
 
     nodeElem(vnode, DOMElement);
 
@@ -89,7 +92,7 @@ function createThunk(vnode, path)
 
     let { fn, props } = vnode;
 
-    let component = instantiateThunk(vnode);
+    let component = thunkInstantiate(vnode);
 
     nodePath(vnode, basePath);
 

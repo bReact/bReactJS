@@ -1,34 +1,6 @@
-import { createElement } from './element';
-import { rerenderThunk, instantiateThunk, updateThunk } from './thunk';
-import {
-	patchVnode,
-	isMounted,
-	isFragment,
-	isThunk,
-	isNative,
-	isText,
-	isEmpty,
-	noChildren,
-	singleChild,
-	patchVnodes,
-	isThunkInstantiated,
-	isSameThunk,
-	isSameFragment,
-	createPath,
-	thunkName,
-	nodeWillUnmount,
-	nodePath,
-	nodeElem,
-	nodeComponent,
-	pointVnodeThunk,
-	emptyChildren
-} from './element';
-
+export { createElement } from './element';
+export { thunkRender, thunkInstantiate, thunkUpdate } from './thunk';
 export {
-	createElement,
-	rerenderThunk,
-	instantiateThunk,
-	updateThunk,
 	patchVnode,
 	isMounted,
 	isFragment,
@@ -38,16 +10,16 @@ export {
 	isEmpty,
 	noChildren,
 	singleChild,
+	patchVnodes,
 	isThunkInstantiated,
 	isSameThunk,
 	isSameFragment,
 	createPath,
-	patchVnodes,
 	thunkName,
 	nodeWillUnmount,
 	nodePath,
 	nodeElem,
 	nodeComponent,
 	pointVnodeThunk,
-	emptyChildren,
-};
+	nodeAttributes,
+} from './element';

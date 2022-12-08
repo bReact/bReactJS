@@ -1,3 +1,5 @@
+import { in_dom } from '../utils';
+
 const _events = {};
 
 /**
@@ -262,31 +264,6 @@ function _removeListener(el, eventName, handler, useCapture)
     {
         el.detachEvent('on' + eventName, handler, useCapture);
     }
-}
-
-/**
- * Check if a node exists in the DOM
- *
- * @access public
- * @param  node   element Target element
- * @return bool
- */
-function _.in_dom(element)
-{
-    if (element === document.body || element === document.documentElement)
-    {
-        return true;
-    }
-
-    if (typeof(element) !== "undefined" && element !== null)
-    {
-        if (typeof(element.parentNode) !== "undefined" && element.parentNode !== null)
-        {
-            return (element === document.body) ? false : document.body.contains(element);
-        }
-    }
-
-    return false;
 }
 
 export default { addEventListener, removeEventListener, clearEventListeners, collectGarbage };

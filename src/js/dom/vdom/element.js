@@ -76,6 +76,7 @@ export function createElement(tag, props, ...children)
         {
             _domEl: null,
             _path: '',
+            _prevAttrs: '',
         }
     }
 }
@@ -198,6 +199,28 @@ function createThunkElement(fn, props, children, key, ref)
 
     return {
         type: _type,
+        fn,
+        children,
+        props,
+        key,
+        __internals:
+        {
+            _domEl: null,
+            _component: null,
+            _name : _.callable_name(fn),
+            _path: '',
+        }
+    }
+}
+
+/**
+ * Lazily-rendered virtual nodes
+ */
+
+function createFunctionThunk(fn, props, children, key, ref)
+{    
+    return {
+        type: 'thunkFunc',
         fn,
         children,
         props,
@@ -349,6 +372,22 @@ export let nodeElem = (node, elem) =>
 }
 
 /**
+ * Get/set a nodes DOM element
+ */
+
+export let nodeAttributes = (node, attrs) =>
+{
+    if (!_.is_undefined(attrs))
+    {
+        node.__internals._prevAttrs = node.attributes;
+
+        node.attributes = attrs;
+    }
+
+    return node.attributes;
+}
+
+/**
  * Get/set a nodes component
  */
 
@@ -372,7 +411,7 @@ export let pointVnodeThunk = (vnode, component) =>
     vnode.__internals._component = component;
 
     // point component -> vnode
-    component._vnode = vnode;
+    component.__internals.vnode = vnode;
 
     // Point vnode.children -> component.props.children
     if (component.props && component.props.children)
@@ -406,7 +445,7 @@ export function patchVnodes(left, right)
  * in a sub tree
  */
 
-export let thunkWillMount = (vnode) =>
+export let nodeWillMount = (vnode) =>
 {
     
 }
