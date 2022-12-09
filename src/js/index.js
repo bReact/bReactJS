@@ -75,32 +75,29 @@ import { render, Component, createElement, Fragment } from './dom';
         }
     }
 
-    class FragmentTest extends Component
+    class FragmentNest2 extends Component
     {
-        constructor(props)
+        Fragment = Fragment;
+
+        render()
         {
-            super(props);
-
-            this.Fragment = Fragment;
-
-            console.log('Constructing FragmentTest');
+            return `
+                <Fragment>
+                    <div>4. nested fragment2!</div>
+                    <div>3. nested fragment2!</div>
+                </Fragment>
+            `;
         }
+    }
+
+    class FragmentNest1 extends Component
+    {
+        FragmentNest2 = FragmentNest2;
         
         render()
         {
-            console.log('rending FragmentTest');
-
             return `
-                <Fragment>
-                    <li>f 1.</li>
-                    <li>f 2.</li>
-                    <Fragment>
-                        <li>f 3.</li>
-                        <li>f 4.</li>
-                    </Fragment>
-                    <li>f 5.</li>
-                    <li>f 6.</li>
-                </Fragment>
+                <FragmentNest2 />
             `;
         }
     }
@@ -121,7 +118,7 @@ import { render, Component, createElement, Fragment } from './dom';
             this.Nest1       = Nest1;
             this.Nest2       = Nest2;
             this.variable    = 'interpolated variable';
-            this.FragmentTest = FragmentTest;
+            this.FragmentNest1 = FragmentNest1;
             this.Fragment     = Fragment;
             this.foo = null;
             this.styles1      = {
@@ -148,7 +145,7 @@ import { render, Component, createElement, Fragment } from './dom';
 
         tick()
         {
-            if (this.state.counter === 3)
+            if (this.state.counter === 2)
             {
                 return;
             }
@@ -176,9 +173,18 @@ import { render, Component, createElement, Fragment } from './dom';
 
         render()
         {
+            return `
+                 <div>
+                    1. One
+                    <FragmentNest1 />
+                    2. Two
+                    <FragmentNest1 />
+                </div>
+            `;
+
             console.log('rending Foo');
 
-          /*  if (this.state.counter === 2)
+           /* if (this.state.counter === 2)
             {
                 return `
                     <ul>
@@ -192,27 +198,37 @@ import { render, Component, createElement, Fragment } from './dom';
                     <li>li 1</li>
                     <li>li 2</li>
                 </ul>
-            `;*/
+            `;
+*/
 
+            if (this.state.counter === 2)
+            {
+                return `
+                   <section>
+                        <div checked="true" disabled={false}>1.div</div>
+                        <Bar key="test" testprop={this.state.counter} otherprop="foobar" />
+                        <i>foo</i>
+                        <i>foo</i>
+                        <i>foo</i>
+                        <span key="span">4.span</span>
+                        <div onClick={this.handler}>3. div</div>
+                        <i>foo</i>
+                        <i>foo</i>
+                        <i>foo</i>
+                        <section style={this.styles1}>section</section>
+                    </section>
+                `;
 
-        
+            }
 
          return `
-            <div>
-                <li>1.</li>
-                <li>2.</li>
-                <FragmentTest />
-                <Fragment>
-                    <li>3.</li>
-                    <li>4.</li>
-                    <Fragment>
-                        <li>5.</li>
-                        <li>6.</li>
-                    </Fragment>
-                    <li>7.</li>
-                    <li>8.</li>
-                </Fragment>
-            </div>
+            <section>
+                <div onClick={this.handler} style={this.styles1}>1.div</div>
+                <i>2.i</i>
+                <div style={this.styles2}>3. div</div>
+                <span key="span">4.span</span>
+                <Bar key="test" testprop={this.state.counter} otherprop="foobar" />
+            </section>
             `;
             
         }
@@ -226,14 +242,14 @@ import { render, Component, createElement, Fragment } from './dom';
     };
 
 
-    /*const TestFunc = (props) =>
+    const TestFunc = (props) =>
     {
         console.log(this);
 
         let name = 'test';
 
         return `<div>hello world{this.name}</div>`;
-    };*/
+    };
 
     render(Foo, document.getElementById('app'));
 

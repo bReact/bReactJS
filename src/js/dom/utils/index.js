@@ -198,6 +198,44 @@ export function array_filter(arr)
 }
 
 /**
+ * Merges multiple objects or arrays into the original
+ *
+ * @param  object|array object Object to delete from
+ * @return object|array
+ */
+export function array_merge()
+{
+    let args = Array.prototype.slice.call(arguments);
+
+    if (args.length === 0)
+    {
+        throw new Error('Nothing to merge.');
+    }
+    else if (args.length === 1)
+    {
+        return args[1];
+    }
+
+    let first = args.shift();
+    let fType = is_array(first) ? 'array' : 'obj';
+
+    foreach(args, function(i, arg)
+    {
+        if (!is_array(arg) && !is_object(arg))
+        {
+            throw new Error('Arguments must be an array or object.');
+        }
+
+        foreach(arg, function(i, val)
+        {
+            fType === 'array' ? first.push(val) : first[i] = val;
+        });
+    });
+
+    return first;
+}
+
+/**
  * Recursively delete from array/object
  *
  * @access private
@@ -916,7 +954,7 @@ export function mergeDeep(target, ...sources)
  * 
  * // callback(value, keyOrIndex) this = context 
  */
-export function mapStrict(arrayOrObj, callback, context)
+export function map(arrayOrObj, callback, context)
 {
     context = typeof context === 'undefined' ? arrayOrObj : context;
 
@@ -971,64 +1009,6 @@ export function mapStrict(arrayOrObj, callback, context)
     }
 }
 
-/**
- * Map object to array
- * 
- * return undefined to break loop, true to keep, false to reject
- * 
- * @param [{Array}|{Objet}] object     Object or array
- * @param {Function}        callback   Callback
- * @param {context}         context    callback context (optional)
- * 
- * // callback(value, keyOrIndex) this = context 
- */
-export function mapObjectArr(object, callback, context)
-{
-    context = typeof context === 'undefined' ? object : context;
-
-    var ret = [];
-
-    for (var key in object)
-    {
-        if (object.hasOwnProperty(key))
-        {
-            var value = callback.call(context, object[key], key);
-
-            if (value === false)
-            {
-                continue;
-            }
-            else if (typeof value === 'undefined')
-            {
-                break;
-            }
-            else if (value)
-            {
-                ret.push(value);
-            }
-        }
-    }
-
-    return ret;
-}
-
-/**
- * Join object.
- * 
- * @param [{Array}|{Objet}] arrayOrObj Object or array
- * @param {Function}        callback   Callback
- * @param {context}         context    callback context (optional)
- * 
- * // callback(value, keyOrIndex) this = context 
- */
-export function joinObj(obj, glue, separator)
-{
-    glue = typeof glue === 'undefined' ? '=' : glue;
-
-    separator = typeof separator === 'undefined' ? ',' : separator;
-
-    return Object.keys(obj).map(function (key) { return [key, obj[key]].join(glue); }).join(separator);
-}
 
 const _ = {
     isset,
@@ -1038,6 +1018,7 @@ const _ = {
     array_get,
     array_has,
     array_delete,
+    array_merge,
     dotify,
     size,
     bool,
@@ -1056,9 +1037,7 @@ const _ = {
     is_number,
     is_string,
     mergeDeep,
-    mapStrict,
-    mapObjectArr,
-    joinObj
+    map,
 };
 
 export default _;

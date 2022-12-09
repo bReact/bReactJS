@@ -15,8 +15,6 @@ export function render(component, parent)
 
 export function mount(DOMElement, parent)
 {        
-    console.log(DOMElement);
-
     // Edge case where root renders a fragment
     if (_.is_array(DOMElement))
     {

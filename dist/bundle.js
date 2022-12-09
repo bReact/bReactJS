@@ -228,6 +228,44 @@ function array_filter(arr)
 }
 
 /**
+ * Merges multiple objects or arrays into the original
+ *
+ * @param  object|array object Object to delete from
+ * @return object|array
+ */
+function array_merge()
+{
+    let args = Array.prototype.slice.call(arguments);
+
+    if (args.length === 0)
+    {
+        throw new Error('Nothing to merge.');
+    }
+    else if (args.length === 1)
+    {
+        return args[1];
+    }
+
+    let first = args.shift();
+    let fType = is_array(first) ? 'array' : 'obj';
+
+    foreach(args, function(i, arg)
+    {
+        if (!is_array(arg) && !is_object(arg))
+        {
+            throw new Error('Arguments must be an array or object.');
+        }
+
+        foreach(arg, function(i, val)
+        {
+            fType === 'array' ? first.push(val) : first[i] = val;
+        });
+    });
+
+    return first;
+}
+
+/**
  * Recursively delete from array/object
  *
  * @access private
@@ -946,7 +984,7 @@ function mergeDeep(target, ...sources)
  * 
  * // callback(value, keyOrIndex) this = context 
  */
-function mapStrict(arrayOrObj, callback, context)
+function map(arrayOrObj, callback, context)
 {
     context = typeof context === 'undefined' ? arrayOrObj : context;
 
@@ -1001,64 +1039,6 @@ function mapStrict(arrayOrObj, callback, context)
     }
 }
 
-/**
- * Map object to array
- * 
- * return undefined to break loop, true to keep, false to reject
- * 
- * @param [{Array}|{Objet}] object     Object or array
- * @param {Function}        callback   Callback
- * @param {context}         context    callback context (optional)
- * 
- * // callback(value, keyOrIndex) this = context 
- */
-function mapObjectArr(object, callback, context)
-{
-    context = typeof context === 'undefined' ? object : context;
-
-    var ret = [];
-
-    for (var key in object)
-    {
-        if (object.hasOwnProperty(key))
-        {
-            var value = callback.call(context, object[key], key);
-
-            if (value === false)
-            {
-                continue;
-            }
-            else if (typeof value === 'undefined')
-            {
-                break;
-            }
-            else if (value)
-            {
-                ret.push(value);
-            }
-        }
-    }
-
-    return ret;
-}
-
-/**
- * Join object.
- * 
- * @param [{Array}|{Objet}] arrayOrObj Object or array
- * @param {Function}        callback   Callback
- * @param {context}         context    callback context (optional)
- * 
- * // callback(value, keyOrIndex) this = context 
- */
-function joinObj(obj, glue, separator)
-{
-    glue = typeof glue === 'undefined' ? '=' : glue;
-
-    separator = typeof separator === 'undefined' ? ',' : separator;
-
-    return Object.keys(obj).map(function (key) { return [key, obj[key]].join(glue); }).join(separator);
-}
 
 const utils_ = {
     isset,
@@ -1068,6 +1048,7 @@ const utils_ = {
     array_get: utils_array_get,
     array_has,
     array_delete,
+    array_merge,
     dotify,
     size,
     bool,
@@ -1086,9 +1067,7 @@ const utils_ = {
     is_number,
     is_string,
     mergeDeep,
-    mapStrict,
-    mapObjectArr,
-    joinObj
+    map,
 };
 
 /* harmony default export */ const utils = (utils_);
@@ -1179,13 +1158,16 @@ function createElement(tag, props, ...children)
 /**
  * Cleans up the array of child elements.
  * - Flattens nested arrays
+ * - Flattens nested fragments
  * - Converts raw strings and numbers into vnodes
  * - Filters out undefined elements
  */
 
-function normaliseChildren(children, offset)
+function normaliseChildren(children, offset, checkKeys)
 {    
     offset = typeof offset === 'undefined' ? 0 : offset;
+
+    checkKeys = typeof offset === 'undefined' ? false : checkKeys;
 
     var ret = [];
 
@@ -1193,6 +1175,11 @@ function normaliseChildren(children, offset)
     {
         utils.foreach(children, function(i, vnode)
         {
+            if (checkKeys && !vnode.key)
+            {
+                throw new Error('Each child in a list should have a unique "key" prop.')
+            }
+            
             let _key = '|' + (offset + i);
 
             if (utils.is_string(vnode) || utils.is_number(vnode))
@@ -1205,17 +1192,18 @@ function normaliseChildren(children, offset)
             }
             else if (utils.is_array(vnode))
             {                
-                vnode = normaliseChildren(vnode, ret.length);
+                vnode = normaliseChildren(vnode, ret.length, true);
                 
-                ret = [...ret, ...vnode];
+                utils.array_merge(ret, vnode);
+            }
+            else if (isFragment(vnode))
+            {       
+                vnode = normaliseChildren(vnode.children, ret.length);
+
+                utils.array_merge(ret, vnode);
             }
             else
             {
-                if (!vnode.key)
-                {
-                    vnode.key = _key;
-                }
-
                 ret.push(vnode);
             }
            
@@ -1303,7 +1291,7 @@ function createThunkElement(fn, props, children, key, ref)
             _domEl: null,
             _component: null,
             _name : utils.callable_name(fn),
-            _path: '',
+            _path  : '',
         }
     }
 }
@@ -1387,6 +1375,25 @@ let isThunkInstantiated = (vnode) =>
 let isSameFragment = (left, right) =>
 {
     return isFragment(left) && isFragment(right) && left.fn === right.fn;
+}
+
+/**
+ * Checks if thunk is nesting only a fragment.
+ */
+
+let isNestingFragment = (node) =>
+{
+    if (isThunk(node) && isThunkInstantiated(node))
+    {
+        while (node.children && isThunk(node))
+        {
+            node = node.children[0];
+        }
+
+        return isFragment(node);
+    }
+
+    return false;
 }
 
 let prevPath = function(vnode)
@@ -1478,7 +1485,7 @@ let nodeComponent = (node, component) =>
  * Points vnode -> component and component -> vndode
  */
 
-let pointVnodeThunk = (vnode, component) =>
+let pointVnodeThunk = (vnode, component, parentVnode) =>
 {
     // point vnode -> component
     vnode.__internals._component = component;
@@ -1489,10 +1496,31 @@ let pointVnodeThunk = (vnode, component) =>
     // Point vnode.children -> component.props.children
     if (component.props && component.props.children)
     {
-        // Point .node.__internals._domEl -> component -> first nodeElement
-        nodeElem(vnode, findThunkDomEl(vnode));
-
         vnode.children = component.props.children;
+
+        if (isNestingFragment(vnode))
+        {
+            pointNestedFragment(vnode, parentVnode);
+        }
+        else
+        {
+            // Point .node.__internals._domEl -> component -> first nodeElement
+            nodeElem(vnode, findThunkDomEl(vnode));
+        }
+    }
+}
+
+function pointNestedFragment(vnode, parentVnode)
+{
+    let DOMElement = nodeElem(parentVnode);
+
+    nodeElem(vnode, DOMElement);
+
+    while (!isFragment(vnode))
+    {
+        vnode = vnode.children[0];
+
+        nodeElem(vnode, DOMElement);
     }
 }
 
@@ -1557,12 +1585,18 @@ let nodeWillUnmount = (vnode) =>
     }
 }
 
-
 function findThunkDomEl(node)
 {
-    while (isThunk(node))
+    while (node && isThunk(node))
     {
-        node = node.__internals._component.props.children[0];
+        if (isThunkInstantiated(node))
+        {
+            node = node.__internals._component.props.children[0];
+        }
+        else
+        {
+            return null;
+        }
     }
 
     return nodeElem(node);
@@ -2383,7 +2417,7 @@ function groupByKey(children)
     {
         let { key } = child;
 
-        key = key || i;
+        key = !key ? ('|' + i) : key;
 
         ret[key] =
         {
@@ -3322,7 +3356,7 @@ function _ucfirst(string)
  * so they are treated like any other native element.
  */
 
-function createDomElement(vnode, parentDOMElement)
+function createDomElement(vnode, parentVnode)
 {        
     switch (vnode.type)
     {
@@ -3333,10 +3367,10 @@ function createDomElement(vnode, parentDOMElement)
             return createTextNode(vnode, '');
         
         case 'thunk':
-            return createThunk(vnode, parentDOMElement);
+            return createThunk(vnode, parentVnode);
         
         case 'fragment':
-            return createFragment(vnode, parentDOMElement);
+            return createFragment(vnode, parentVnode);
         
         case 'native':
             return createHTMLElement(vnode);
@@ -3365,19 +3399,20 @@ function createHTMLElement(vnode)
 
     nodeElem(vnode, DOMElement);
 
-    utils.foreach(children, function(i, node)
+    utils.foreach(children, function(i, child)
     {
-        if (!utils.is_empty(node))
+        if (!utils.is_empty(child))
         {            
-            let child = createDomElement(node, DOMElement);
+            let childDomElement = createDomElement(child, vnode);
 
-            if (utils.is_array(child))
+            // Returns a fragment
+            if (utils.is_array(childDomElement))
             {
-                mountFragment(DOMElement, child);
+                mountFragment(DOMElement, childDomElement, i);
             }
             else
             {
-                DOMElement.appendChild(child);
+                DOMElement.appendChild(childDomElement);
             }
         }
     });
@@ -3386,30 +3421,30 @@ function createHTMLElement(vnode)
 }
 
 /* Handles nested fragments */
-function mountFragment(DOMElement, children)
+function mountFragment(DOMElement, children, index)
 {
+    if (utils.is_array(children))
+    {
+        utils.foreach(children, function(i, child)
+        {
+            mountFragment(DOMElement, child, index);
+        });
+    }
+
     if (utils.is_htmlElement(children))
     {
         DOMElement.appendChild(children);
 
         return;
     }
-
-    if (utils.is_array(children))
-    {
-        utils.foreach(children, function(i, child)
-        {
-            mountFragment(DOMElement, child);
-        });
-    }
 }
 
-function createThunk(vnode, parentDOMElement)
+function createThunk(vnode, parentVnode)
 {
     // Skip this it's already been rendered if it's coming from a patch
     if (isThunkInstantiated(vnode))
     {
-        let DOMElement = createDomElement(vnode.children[0], parentDOMElement);
+        let DOMElement = createDomElement(vnode.children[0], vnode);
 
         nodeElem(vnode, DOMElement);
 
@@ -3420,24 +3455,26 @@ function createThunk(vnode, parentDOMElement)
 
     let component = thunkInstantiate(vnode);
 
-    pointVnodeThunk(vnode, component);
+    let DOMElement = createDomElement(component.props.children[0], vnode);
 
-    let DOMElement = createDomElement(vnode.children[0], parentDOMElement);
-
-    nodeElem(vnode, DOMElement);
+    pointVnodeThunk(vnode, component, parentVnode);
+    
+    // returned a fragment or a component that returned a fragment
+    if (!utils.is_htmlElement(DOMElement))
+    {
+        nodeElem(vnode, DOMElement);
+    }
 
     return DOMElement;
 }
 
-function createFragment(vnode, parentDOMElement)
+function createFragment(vnode, parentVnode)
 {    
-    nodeElem(vnode, parentDOMElement);
-
     let ret = [];
 
     utils.foreach(vnode.children, function(i, node)
     {
-        ret.push(createDomElement(node, parentDOMElement));
+        ret.push(createDomElement(node, parentVnode));
     });
 
     return ret;
@@ -3643,8 +3680,6 @@ function render(component, parent)
 
 function mount(DOMElement, parent)
 {        
-    console.log(DOMElement);
-
     // Edge case where root renders a fragment
     if (utils.is_array(DOMElement))
     {
@@ -3896,32 +3931,29 @@ class Fragment extends Component
         }
     }
 
-    class FragmentTest extends Component
+    class FragmentNest2 extends Component
     {
-        constructor(props)
+        Fragment = Fragment;
+
+        render()
         {
-            super(props);
-
-            this.Fragment = Fragment;
-
-            console.log('Constructing FragmentTest');
+            return `
+                <Fragment>
+                    <div>4. nested fragment2!</div>
+                    <div>3. nested fragment2!</div>
+                </Fragment>
+            `;
         }
+    }
+
+    class FragmentNest1 extends Component
+    {
+        FragmentNest2 = FragmentNest2;
         
         render()
         {
-            console.log('rending FragmentTest');
-
             return `
-                <Fragment>
-                    <li>f 1.</li>
-                    <li>f 2.</li>
-                    <Fragment>
-                        <li>f 3.</li>
-                        <li>f 4.</li>
-                    </Fragment>
-                    <li>f 5.</li>
-                    <li>f 6.</li>
-                </Fragment>
+                <FragmentNest2 />
             `;
         }
     }
@@ -3942,7 +3974,7 @@ class Fragment extends Component
             this.Nest1       = Nest1;
             this.Nest2       = Nest2;
             this.variable    = 'interpolated variable';
-            this.FragmentTest = FragmentTest;
+            this.FragmentNest1 = FragmentNest1;
             this.Fragment     = Fragment;
             this.foo = null;
             this.styles1      = {
@@ -3969,7 +4001,7 @@ class Fragment extends Component
 
         tick()
         {
-            if (this.state.counter === 3)
+            if (this.state.counter === 2)
             {
                 return;
             }
@@ -3997,9 +4029,18 @@ class Fragment extends Component
 
         render()
         {
+            return `
+                 <div>
+                    1. One
+                    <FragmentNest1 />
+                    2. Two
+                    <FragmentNest1 />
+                </div>
+            `;
+
             console.log('rending Foo');
 
-          /*  if (this.state.counter === 2)
+           /* if (this.state.counter === 2)
             {
                 return `
                     <ul>
@@ -4013,27 +4054,37 @@ class Fragment extends Component
                     <li>li 1</li>
                     <li>li 2</li>
                 </ul>
-            `;*/
+            `;
+*/
 
+            if (this.state.counter === 2)
+            {
+                return `
+                   <section>
+                        <div checked="true" disabled={false}>1.div</div>
+                        <Bar key="test" testprop={this.state.counter} otherprop="foobar" />
+                        <i>foo</i>
+                        <i>foo</i>
+                        <i>foo</i>
+                        <span key="span">4.span</span>
+                        <div onClick={this.handler}>3. div</div>
+                        <i>foo</i>
+                        <i>foo</i>
+                        <i>foo</i>
+                        <section style={this.styles1}>section</section>
+                    </section>
+                `;
 
-        
+            }
 
          return `
-            <div>
-                <li>1.</li>
-                <li>2.</li>
-                <FragmentTest />
-                <Fragment>
-                    <li>3.</li>
-                    <li>4.</li>
-                    <Fragment>
-                        <li>5.</li>
-                        <li>6.</li>
-                    </Fragment>
-                    <li>7.</li>
-                    <li>8.</li>
-                </Fragment>
-            </div>
+            <section>
+                <div onClick={this.handler} style={this.styles1}>1.div</div>
+                <i>2.i</i>
+                <div style={this.styles2}>3. div</div>
+                <span key="span">4.span</span>
+                <Bar key="test" testprop={this.state.counter} otherprop="foobar" />
+            </section>
             `;
             
         }
@@ -4047,14 +4098,14 @@ class Fragment extends Component
     };
 
 
-    /*const TestFunc = (props) =>
+    const TestFunc = (props) =>
     {
         console.log(this);
 
         let name = 'test';
 
         return `<div>hello world{this.name}</div>`;
-    };*/
+    };
 
     render(Foo, document.getElementById('app'));
 

@@ -84,13 +84,16 @@ export function createElement(tag, props, ...children)
 /**
  * Cleans up the array of child elements.
  * - Flattens nested arrays
+ * - Flattens nested fragments
  * - Converts raw strings and numbers into vnodes
  * - Filters out undefined elements
  */
 
-function normaliseChildren(children, offset)
+function normaliseChildren(children, offset, checkKeys)
 {    
     offset = typeof offset === 'undefined' ? 0 : offset;
+
+    checkKeys = typeof offset === 'undefined' ? false : checkKeys;
 
     var ret = [];
 
@@ -98,6 +101,11 @@ function normaliseChildren(children, offset)
     {
         _.foreach(children, function(i, vnode)
         {
+            if (checkKeys && !vnode.key)
+            {
+                throw new Error('Each child in a list should have a unique "key" prop.')
+            }
+            
             let _key = '|' + (offset + i);
 
             if (_.is_string(vnode) || _.is_number(vnode))
@@ -110,17 +118,18 @@ function normaliseChildren(children, offset)
             }
             else if (_.is_array(vnode))
             {                
-                vnode = normaliseChildren(vnode, ret.length);
+                vnode = normaliseChildren(vnode, ret.length, true);
                 
-                ret = [...ret, ...vnode];
+                _.array_merge(ret, vnode);
+            }
+            else if (isFragment(vnode))
+            {       
+                vnode = normaliseChildren(vnode.children, ret.length);
+
+                _.array_merge(ret, vnode);
             }
             else
             {
-                if (!vnode.key)
-                {
-                    vnode.key = _key;
-                }
-
                 ret.push(vnode);
             }
            
@@ -208,7 +217,7 @@ function createThunkElement(fn, props, children, key, ref)
             _domEl: null,
             _component: null,
             _name : _.callable_name(fn),
-            _path: '',
+            _path  : '',
         }
     }
 }
@@ -292,6 +301,25 @@ export let isThunkInstantiated = (vnode) =>
 export let isSameFragment = (left, right) =>
 {
     return isFragment(left) && isFragment(right) && left.fn === right.fn;
+}
+
+/**
+ * Checks if thunk is nesting only a fragment.
+ */
+
+export let isNestingFragment = (node) =>
+{
+    if (isThunk(node) && isThunkInstantiated(node))
+    {
+        while (node.children && isThunk(node))
+        {
+            node = node.children[0];
+        }
+
+        return isFragment(node);
+    }
+
+    return false;
 }
 
 export let prevPath = function(vnode)
@@ -383,7 +411,7 @@ export let nodeComponent = (node, component) =>
  * Points vnode -> component and component -> vndode
  */
 
-export let pointVnodeThunk = (vnode, component) =>
+export let pointVnodeThunk = (vnode, component, parentVnode) =>
 {
     // point vnode -> component
     vnode.__internals._component = component;
@@ -394,10 +422,31 @@ export let pointVnodeThunk = (vnode, component) =>
     // Point vnode.children -> component.props.children
     if (component.props && component.props.children)
     {
-        // Point .node.__internals._domEl -> component -> first nodeElement
-        nodeElem(vnode, findThunkDomEl(vnode));
-
         vnode.children = component.props.children;
+
+        if (isNestingFragment(vnode))
+        {
+            pointNestedFragment(vnode, parentVnode);
+        }
+        else
+        {
+            // Point .node.__internals._domEl -> component -> first nodeElement
+            nodeElem(vnode, findThunkDomEl(vnode));
+        }
+    }
+}
+
+function pointNestedFragment(vnode, parentVnode)
+{
+    let DOMElement = nodeElem(parentVnode);
+
+    nodeElem(vnode, DOMElement);
+
+    while (!isFragment(vnode))
+    {
+        vnode = vnode.children[0];
+
+        nodeElem(vnode, DOMElement);
     }
 }
 
@@ -462,12 +511,18 @@ export let nodeWillUnmount = (vnode) =>
     }
 }
 
-
 function findThunkDomEl(node)
 {
-    while (isThunk(node))
+    while (node && isThunk(node))
     {
-        node = node.__internals._component.props.children[0];
+        if (isThunkInstantiated(node))
+        {
+            node = node.__internals._component.props.children[0];
+        }
+        else
+        {
+            return null;
+        }
     }
 
     return nodeElem(node);

@@ -9,7 +9,7 @@ import _ from '../utils';
  * so they are treated like any other native element.
  */
 
-export function createDomElement(vnode, parentDOMElement)
+export function createDomElement(vnode, parentVnode)
 {        
     switch (vnode.type)
     {
@@ -20,10 +20,10 @@ export function createDomElement(vnode, parentDOMElement)
             return createTextNode(vnode, '');
         
         case 'thunk':
-            return createThunk(vnode, parentDOMElement);
+            return createThunk(vnode, parentVnode);
         
         case 'fragment':
-            return createFragment(vnode, parentDOMElement);
+            return createFragment(vnode, parentVnode);
         
         case 'native':
             return createHTMLElement(vnode);
@@ -52,19 +52,20 @@ function createHTMLElement(vnode)
 
     vDOM.nodeElem(vnode, DOMElement);
 
-    _.foreach(children, function(i, node)
+    _.foreach(children, function(i, child)
     {
-        if (!_.is_empty(node))
+        if (!_.is_empty(child))
         {            
-            let child = createDomElement(node, DOMElement);
+            let childDomElement = createDomElement(child, vnode);
 
-            if (_.is_array(child))
+            // Returns a fragment
+            if (_.is_array(childDomElement))
             {
-                mountFragment(DOMElement, child);
+                mountFragment(DOMElement, childDomElement, i);
             }
             else
             {
-                DOMElement.appendChild(child);
+                DOMElement.appendChild(childDomElement);
             }
         }
     });
@@ -73,30 +74,30 @@ function createHTMLElement(vnode)
 }
 
 /* Handles nested fragments */
-function mountFragment(DOMElement, children)
+function mountFragment(DOMElement, children, index)
 {
+    if (_.is_array(children))
+    {
+        _.foreach(children, function(i, child)
+        {
+            mountFragment(DOMElement, child, index);
+        });
+    }
+
     if (_.is_htmlElement(children))
     {
         DOMElement.appendChild(children);
 
         return;
     }
-
-    if (_.is_array(children))
-    {
-        _.foreach(children, function(i, child)
-        {
-            mountFragment(DOMElement, child);
-        });
-    }
 }
 
-function createThunk(vnode, parentDOMElement)
+function createThunk(vnode, parentVnode)
 {
     // Skip this it's already been rendered if it's coming from a patch
     if (vDOM.isThunkInstantiated(vnode))
     {
-        let DOMElement = createDomElement(vnode.children[0], parentDOMElement);
+        let DOMElement = createDomElement(vnode.children[0], vnode);
 
         vDOM.nodeElem(vnode, DOMElement);
 
@@ -107,24 +108,26 @@ function createThunk(vnode, parentDOMElement)
 
     let component = vDOM.thunkInstantiate(vnode);
 
-    vDOM.pointVnodeThunk(vnode, component);
+    let DOMElement = createDomElement(component.props.children[0], vnode);
 
-    let DOMElement = createDomElement(vnode.children[0], parentDOMElement);
-
-    vDOM.nodeElem(vnode, DOMElement);
+    vDOM.pointVnodeThunk(vnode, component, parentVnode);
+    
+    // returned a fragment or a component that returned a fragment
+    if (!_.is_htmlElement(DOMElement))
+    {
+        vDOM.nodeElem(vnode, DOMElement);
+    }
 
     return DOMElement;
 }
 
-function createFragment(vnode, parentDOMElement)
+function createFragment(vnode, parentVnode)
 {    
-    vDOM.nodeElem(vnode, parentDOMElement);
-
     let ret = [];
 
     _.foreach(vnode.children, function(i, node)
     {
-        ret.push(createDomElement(node, parentDOMElement));
+        ret.push(createDomElement(node, parentVnode));
     });
 
     return ret;

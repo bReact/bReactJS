@@ -139,7 +139,7 @@ function groupByKey(children)
     {
         let { key } = child;
 
-        key = key || i;
+        key = !key ? ('|' + i) : key;
 
         ret[key] =
         {

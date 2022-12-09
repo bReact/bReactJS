@@ -14,6 +14,7 @@ export {
 	isThunkInstantiated,
 	isSameThunk,
 	isSameFragment,
+	isNestingFragment,
 	createPath,
 	thunkName,
 	nodeWillUnmount,
