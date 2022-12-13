@@ -46,6 +46,11 @@ export function setDomAttribute(DOMElement, name, value, previousValue)
 {    
     switch (name)
     {
+        // Skip
+        case 'key':
+        case 'ref':
+            break;
+
         // Style
         case 'style':
             
@@ -126,6 +131,11 @@ export function removeDomAttribute(DOMElement, name, previousValue)
 {
     switch (name)
     {
+        // Skip
+        case 'key':
+        case 'ref':
+            break;
+
         // Class
         case 'class':
         case 'className':

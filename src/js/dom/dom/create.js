@@ -9,7 +9,7 @@ import _ from '../utils';
  * so they are treated like any other native element.
  */
 
-export function createDomElement(vnode, parentVnode)
+export function createDomElement(vnode, parentDOMElement)
 {        
     switch (vnode.type)
     {
@@ -20,14 +20,38 @@ export function createDomElement(vnode, parentVnode)
             return createTextNode(vnode, '');
         
         case 'thunk':
-            return createThunk(vnode, parentVnode);
+            return flatten(createThunk(vnode, parentDOMElement));
         
         case 'fragment':
-            return createFragment(vnode, parentVnode);
+            return flatten(createFragment(vnode, parentDOMElement));
         
         case 'native':
-            return createHTMLElement(vnode);
+            return flatten(createHTMLElement(vnode));
     }
+}
+
+function flatten(DOMElement)
+{
+    if (_.is_array(DOMElement))
+    {
+        let ret = [];
+
+        _.foreach(DOMElement, function(i, child)
+        {
+            if (_.is_array(child))
+            {
+                _.array_merge(ret, flatten(child));
+            }
+            else
+            {
+                ret.push(child);
+            }
+        });
+
+        return ret;
+    }
+
+    return DOMElement;
 }
 
 function createTextNode(vnode, text)
@@ -55,17 +79,17 @@ function createHTMLElement(vnode)
     _.foreach(children, function(i, child)
     {
         if (!_.is_empty(child))
-        {            
-            let childDomElement = createDomElement(child, vnode);
+        {                        
+            let childDOMElem = createDomElement(child, DOMElement);
 
             // Returns a fragment
-            if (_.is_array(childDomElement))
+            if (_.is_array(childDOMElem))
             {
-                mountFragment(DOMElement, childDomElement, i);
+                appendFragment(DOMElement, childDOMElem);
             }
             else
             {
-                DOMElement.appendChild(childDomElement);
+                DOMElement.appendChild(childDOMElem);
             }
         }
     });
@@ -74,32 +98,30 @@ function createHTMLElement(vnode)
 }
 
 /* Handles nested fragments */
-function mountFragment(DOMElement, children, index)
-{
+function appendFragment(parentDOMElement, children)
+{    
     if (_.is_array(children))
     {
         _.foreach(children, function(i, child)
         {
-            mountFragment(DOMElement, child, index);
+            appendFragment(parentDOMElement, child);
         });
     }
 
     if (_.is_htmlElement(children))
     {
-        DOMElement.appendChild(children);
-
-        return;
+        parentDOMElement.appendChild(children);
     }
 }
 
-function createThunk(vnode, parentVnode)
+function createThunk(vnode, parentDOMElement)
 {
     // Skip this it's already been rendered if it's coming from a patch
     if (vDOM.isThunkInstantiated(vnode))
     {
-        let DOMElement = createDomElement(vnode.children[0], vnode);
+        console.log('already instantiated');
 
-        vDOM.nodeElem(vnode, DOMElement);
+        let DOMElement = createDomElement(vnode.children[0]);
 
         return DOMElement;
     }
@@ -108,26 +130,22 @@ function createThunk(vnode, parentVnode)
 
     let component = vDOM.thunkInstantiate(vnode);
 
-    let DOMElement = createDomElement(component.props.children[0], vnode);
+    // Create entire tree recursively
+    let DOMElement = createDomElement(component.props.children[0]);
 
-    vDOM.pointVnodeThunk(vnode, component, parentVnode);
-    
-    // returned a fragment or a component that returned a fragment
-    if (!_.is_htmlElement(DOMElement))
-    {
-        vDOM.nodeElem(vnode, DOMElement);
-    }
+    // Point vnode
+    vDOM.pointVnodeThunk(vnode, component);
 
     return DOMElement;
 }
 
-function createFragment(vnode, parentVnode)
+function createFragment(vnode, parentDOMElement)
 {    
     let ret = [];
 
-    _.foreach(vnode.children, function(i, node)
+    _.foreach(vnode.children, function(i, child)
     {
-        ret.push(createDomElement(node, parentVnode));
+        ret.push(createDomElement(child));
     });
 
     return ret;

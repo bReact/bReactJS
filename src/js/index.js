@@ -93,11 +93,34 @@ import { render, Component, createElement, Fragment } from './dom';
     class FragmentNest1 extends Component
     {
         FragmentNest2 = FragmentNest2;
+        Fragment = Fragment;
         
         render()
         {
             return `
-                <FragmentNest2 />
+                <Fragment>
+                    <FragmentNest2 />
+                </Fragment>
+            `;
+        }
+    }
+
+    class ThunkNest2 extends Component
+    {        
+        render()
+        {
+            return `<div>ThunkNest2</div>`;
+        }
+    }
+
+    class ThunkNest1 extends Component
+    {
+        ThunkNest2 = ThunkNest2;
+        
+        render()
+        {
+            return `
+                <ThunkNest2 />
             `;
         }
     }
@@ -115,6 +138,7 @@ import { render, Component, createElement, Fragment } from './dom';
             this.Bar         = Bar;
             this.numbers     = [1, 2, 3, 4, 5];
             this.nested      = 'Nested from Foo!';
+            this.ThunkNest1  = ThunkNest1;
             this.Nest1       = Nest1;
             this.Nest2       = Nest2;
             this.variable    = 'interpolated variable';
@@ -136,11 +160,11 @@ import { render, Component, createElement, Fragment } from './dom';
 
             console.log('Constructing Foo')
 
-            /*setInterval(function()
+            setInterval(function()
             {
                 _this.tick();
 
-            }, 1000);*/
+            }, 1000);
         }
 
         tick()
@@ -173,16 +197,44 @@ import { render, Component, createElement, Fragment } from './dom';
 
         render()
         {
+            /*return `
+                <section>
+                    <ThunkNest1 />
+                </section>
+            `;*/
+
+           /* if (this.state.counter === 2)
+            {
+               return `
+                     <div>
+                        1. One
+                        <FragmentNest1 />
+                        <Fragment>
+                            <section>Test 1.</section>
+                            <section>Test 2.</section>
+                        </Fragment>
+                        2. Two
+                        <FragmentNest1 />
+                    </div>
+                `;
+            }*/
+
             return `
-                 <div>
-                    1. One
+                <div>
+                    <FragmentNest1 key="test" />
+                    <Fragment>
+                        <ThunkNest1 />
+                        <i>test</i>
+                    </Fragment>
                     <FragmentNest1 />
-                    2. Two
-                    <FragmentNest1 />
+                    <Fragment key="mykey">
+                        <div>Test 1.</div>
+                        <div>Test 2.</div>
+                    </Fragment>
+                    Foo
+                    <div key="testnative"><div>
                 </div>
             `;
-
-            console.log('rending Foo');
 
            /* if (this.state.counter === 2)
             {

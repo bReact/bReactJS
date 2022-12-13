@@ -34,8 +34,10 @@ export function createElement(tag, props, ...children)
         {
             ref = props[i];
         }
-        
-        normalizedProps[i] = props[i];
+        else
+        {
+            normalizedProps[i] = props[i];
+        }
     }
 
     children = typeof children === 'undefined' ? [] : children;
@@ -49,11 +51,11 @@ export function createElement(tag, props, ...children)
 
     // If a Component VNode, check for and apply defaultProps
     // Note: type may be undefined in development, must never error here.
-    if (typeof tag == 'function' && tag.defaultProps != null)
+    if (_.is_callable(tag) && _.is_object(tag.defaultProps))
     {
         for (i in tag.defaultProps)
         {
-            if (normalizedProps[i] === undefined)
+            if (_.is_undefined(normalizedProps[i]))
             {
                 normalizedProps[i] = tag.defaultProps[i];
             }
@@ -75,8 +77,7 @@ export function createElement(tag, props, ...children)
         __internals:
         {
             _domEl: null,
-            _path: '',
-            _prevAttrs: '',
+            _prevAttrs: ''
         }
     }
 }
@@ -87,13 +88,17 @@ export function createElement(tag, props, ...children)
  * - Flattens nested fragments
  * - Converts raw strings and numbers into vnodes
  * - Filters out undefined elements
+ * - Fragments that are nested inside an normal node
+ * - are essentially just array containers, so they get flattened here.
+ * - if a component returns a fragment however that gets handled
+ * - during the commit/patch/create stages.
  */
 
-function normaliseChildren(children, offset, checkKeys)
+function normaliseChildren(children, checkKeys)
 {    
-    offset = typeof offset === 'undefined' ? 0 : offset;
+    checkKeys = _.is_undefined(checkKeys) ? false : checkKeys;
 
-    checkKeys = typeof offset === 'undefined' ? false : checkKeys;
+    let fragmentcount = 0;
 
     var ret = [];
 
@@ -101,42 +106,52 @@ function normaliseChildren(children, offset, checkKeys)
     {
         _.foreach(children, function(i, vnode)
         {
-            if (checkKeys && !vnode.key)
+            if (_.is_null(vnode) || _.is_undefined(vnode))
+            {
+                ret.push(createEmptyElement());
+            }
+            else if (checkKeys && !vnode.key)
             {
                 throw new Error('Each child in a list should have a unique "key" prop.')
             }
-            
-            let _key = '|' + (offset + i);
-
-            if (_.is_string(vnode) || _.is_number(vnode))
+            else if (_.is_string(vnode) || _.is_number(vnode))
             {
-                ret.push(createTextElement(vnode, _key))
-            }
-            else if (_.is_empty(vnode))
-            {
-                ret.push(createEmptyElement(_key))
+                ret.push(createTextElement(vnode, null));
             }
             else if (_.is_array(vnode))
             {                
-                vnode = normaliseChildren(vnode, ret.length, true);
+                let _children = normaliseChildren(vnode, true);
                 
-                _.array_merge(ret, vnode);
+                _.array_merge(ret, _children);
             }
             else if (isFragment(vnode))
             {       
-                vnode = normaliseChildren(vnode.children, ret.length);
+                squashFragment(vnode, ret, fragmentcount);
 
-                _.array_merge(ret, vnode);
+                fragmentcount++;
             }
             else
             {
                 ret.push(vnode);
             }
-           
         });
     }
+
+    return _.is_empty(ret) ? [createEmptyElement()] : filterChildren(ret);
+}
+
+function squashFragment(fragment, ret, fCount)
+{
+    let basekey = !fragment.key ? `f_${fCount}` : fragment.key;
+
+    let _children = normaliseChildren(fragment.children, false);
+
+    _.foreach(_children, function(i, vnode)
+    {
+        vnode.key = `${basekey}|${i}`;
+    });
     
-    return _.is_empty(ret) ? [createEmptyElement('|0')] : filterChildren(ret);
+    _.array_merge(ret, _children);
 }
 
 /**
@@ -175,8 +190,7 @@ function createTextElement(text, key)
         key : key,
         __internals:
         {
-            _domEl: null,
-            _path: '',
+            _domEl: null
         }
     }
 }
@@ -185,15 +199,14 @@ function createTextElement(text, key)
  * Text nodes are stored as objects to keep things simple
  */
 
-function createEmptyElement(key)
+function createEmptyElement()
 {
     return {
         type: 'empty',
-        key: key,
+        key: null,
         __internals:
         {
-            _domEl: null,
-            _path: '',
+            _domEl: null
         }
     }
 }
@@ -216,8 +229,7 @@ function createThunkElement(fn, props, children, key, ref)
         {
             _domEl: null,
             _component: null,
-            _name : _.callable_name(fn),
-            _path  : '',
+            _name : _.callable_name(fn)
         }
     }
 }
@@ -322,24 +334,6 @@ export let isNestingFragment = (node) =>
     return false;
 }
 
-export let prevPath = function(vnode)
-{
-    let path = nodePath(vnode).split('.');
-
-    path.pop();
-
-    return path.join('.');
-}
-
-/**
- * Create a node path, eg. (23,5,2,4) => '23.5.2.4'
- */
-
-export let createPath = (...args) =>
-{
-    return args.join('.');
-}
-
 /**
  * Returns thunk function / class name
  */
@@ -347,20 +341,6 @@ export let createPath = (...args) =>
 export let thunkName = (node) =>
 {
     return node.__internals._name;
-}
-
-/**
- * Get/set a nodes path
- */
-
-export let nodePath = (node, path) =>
-{
-    if (!_.is_undefined(path))
-    {
-        node.__internals._path = path + '';
-    }
-
-    return node.__internals._path;
 }
 
 /**
@@ -372,9 +352,26 @@ export let nodeElem = (node, elem) =>
     if (!_.is_undefined(elem))
     {
         node.__internals._domEl = elem;
+
+        return elem;
+    }
+
+    if (isThunk(node) || isFragment(node))
+    {
+        return findThunkDomEl(node);
     }
 
     return node.__internals._domEl;
+}
+
+export let parentElem = (node) =>
+{
+    if (isNative(node) || isText(node) || isEmpty(node))
+    {
+        return nodeElem(node).parentNode;
+    }
+    
+    return findThunkParentDomEl(node);
 }
 
 /**
@@ -407,11 +404,58 @@ export let nodeComponent = (node, component) =>
     return node.__internals._component;
 }
 
+// Recursively traverse down tree until either a DOM node is found
+// or a fragment is found and return it's children
+
+function findThunkDomEl(vnode)
+{
+    let child = vnode.children[0];
+
+    if (isNative(child) || isText(child) || isEmpty(child))
+    {
+        return nodeElem(child);
+    }
+
+    while (isThunk(child) || isFragment(child))
+    {
+        vnode = child;
+        child = child.children[0];
+    }
+
+    return isFragment(vnode) ? 
+        _.map(vnode.children, function(i, child)
+        { 
+            return nodeElem(child); 
+        }) 
+        : nodeElem(vnode);
+}
+
+// Recursively traverse down tree until either a DOM node is found
+// or a fragment is found and return it's children
+
+function findThunkParentDomEl(vnode)
+{
+    let child = vnode.children[0];
+
+    if (isNative(child) || isText(child) || isEmpty(child))
+    {
+        return nodeElem(child).parentNode;
+    }
+
+    while (isThunk(child) || isFragment(child))
+    {
+        vnode = child;
+        child = child.children[0];
+    }
+
+    return isFragment(vnode) ? nodeElem(vnode.children[0]).parentNode : nodeElem(vnode).parentNode;
+}
+
 /**
  * Points vnode -> component and component -> vndode
  */
 
-export let pointVnodeThunk = (vnode, component, parentVnode) =>
+export let pointVnodeThunk = (vnode, component) =>
 {
     // point vnode -> component
     vnode.__internals._component = component;
@@ -423,30 +467,6 @@ export let pointVnodeThunk = (vnode, component, parentVnode) =>
     if (component.props && component.props.children)
     {
         vnode.children = component.props.children;
-
-        if (isNestingFragment(vnode))
-        {
-            pointNestedFragment(vnode, parentVnode);
-        }
-        else
-        {
-            // Point .node.__internals._domEl -> component -> first nodeElement
-            nodeElem(vnode, findThunkDomEl(vnode));
-        }
-    }
-}
-
-function pointNestedFragment(vnode, parentVnode)
-{
-    let DOMElement = nodeElem(parentVnode);
-
-    nodeElem(vnode, DOMElement);
-
-    while (!isFragment(vnode))
-    {
-        vnode = vnode.children[0];
-
-        nodeElem(vnode, DOMElement);
     }
 }
 
@@ -466,17 +486,6 @@ export function patchVnodes(left, right)
         }
     });
 }
-
-/**
- * Recursively calls unmount on nested components
- * in a sub tree
- */
-
-export let nodeWillMount = (vnode) =>
-{
-    
-}
-
 
 /**
  * Recursively calls unmount on nested components
@@ -511,30 +520,6 @@ export let nodeWillUnmount = (vnode) =>
     }
 }
 
-function findThunkDomEl(node)
-{
-    while (node && isThunk(node))
-    {
-        if (isThunkInstantiated(node))
-        {
-            node = node.__internals._component.props.children[0];
-        }
-        else
-        {
-            return null;
-        }
-    }
 
-    return nodeElem(node);
-}
-
-/**
- * Empty node children
- */
-
-export let emptyChildren = (node) =>
-{
-   
-}
 
 export default createElement;

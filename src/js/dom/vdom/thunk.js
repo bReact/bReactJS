@@ -33,6 +33,8 @@ export function thunkUpdate(vnode)
     {
         commit(actions.current);
     }
+
+    console.log(vnode);
 }
 
 export function thunkRender(component)

@@ -14,11 +14,6 @@ export function patch(prevNode, nextNode, actions)
     {
         // nothing to do
     }
-    // Replace empty -> empty, empty -> something (excludes thunks which need to be rendered)
-    else if (((!vElem.isEmpty(prevNode) && vElem.isEmpty(nextNode) || vElem.isEmpty(prevNode) && !vElem.isEmpty(nextNode))) && nextNode.type !== 'thunk')
-    {
-        replaceNode(prevNode, nextNode, actions);
-    }
     else if (prevNode.type !== nextNode.type)
     {
         replaceNode(prevNode, nextNode, actions);
@@ -41,7 +36,7 @@ export function patch(prevNode, nextNode, actions)
     }
     else if (vElem.isEmpty(nextNode))
     {
-        // nothing to do
+        replaceNode(prevNode, nextNode, actions);
     }
 }
 
@@ -66,7 +61,9 @@ function replaceNode(left, right, actions)
         }
         else
         {
-            thunk.thunkInstantiate(right);
+            let component = thunk.thunkInstantiate(right);
+
+            vElem.pointVnodeThunk(vnode, component);
         }
     }
 
@@ -120,35 +117,17 @@ function patchThunk(left, right, actions)
     // Different components
     else
     {
-        thunk.thunkInstantiate(right);
+        let component = thunk.thunkInstantiate(right);
+
+        vElem.pointVnodeThunk(vnode, component);
 
         actions.push(action('replaceNode', [left, right]));
     }
 }
 
-function patchFragment(prevNode, nextNode, parentDOMElement)
+function patchFragment(left, right, actions)
 {
-    
-}
-
-function groupByKey(children)
-{
-    let ret = {};
-
-    _.foreach(children, function(i, child)
-    {
-        let { key } = child;
-
-        key = !key ? ('|' + i) : key;
-
-        ret[key] =
-        {
-            index: i,
-            child,
-        };
-    });
-
-    return ret;
+    patchChildren(left, right, actions);
 }
 
 /**
@@ -235,7 +214,7 @@ function patchChildren(left, right, actions)
             _.foreach(lChildren, function(i, lChild)
             {
                 if (lChild.key === rChildren[0].key)
-                {
+                {                    
                     patch(lChild, rChildren[0], actions);
 
                     matchedKey = true;
@@ -319,15 +298,19 @@ function diffChildren(left, right, actions)
     let rGroup = groupByKey(right.children);
     let actionsStartIndex = actions.length > 0 ? actions.length : 0;
     let subActions = [];
+    let inserted = 0;
 
     // Note we should still patch indivdual children etc.. but check keys
 
     // Special case if keys are exactly the same we can just patch each child
-    let lKeys = Object.keys(lGroup).sort();
-    let rKeys = Object.keys(rGroup).sort();
+    let lKeys = Object.keys(lGroup);
+    let rKeys = Object.keys(rGroup);
+
+    console.log(lKeys);
+    console.log(rKeys);
 
     if (_.is_equal(lKeys, rKeys))
-    {
+    {        
         _.foreach(right.children, function(i, rChild)
         {
             patch(left.children[i], rChild, actions);
@@ -335,9 +318,7 @@ function diffChildren(left, right, actions)
 
         return;
     }
-
-    let inserted = 0;
-
+   
     // Loop right children
     // Note insertAtIndex & removeChild to be executed before moveToIndex
     // otherwise moveToIndex will be incorrect
@@ -408,6 +389,51 @@ function diffChildren(left, right, actions)
             actionsStartIndex++;
         });
     }
+}
+
+// We need to key thunks by name / count here
+// so they get patched rather than remounted
+
+function groupByKey(children)
+{
+    let ret   = {};
+    let thunks = {};
+
+    _.foreach(children, function(i, child)
+    {
+        let { key } = child;
+
+        // This stop thunks from reinstating when they don't need to
+        if (vElem.isThunk(child) && !key)
+        {
+            let name = vElem.thunkName(child);
+
+            if (!_.is_undefined(thunks[name]))
+            {
+                key = name + '_' + (thunks[name] + 1);
+
+                thunks[name]++;
+            }
+            else
+            {
+                key = name;
+
+                thunks[name] = 1;
+            }
+        }
+        else
+        {
+            key = !key ? ('|' + i) : key;
+        }
+
+        ret[key] =
+        {
+            index: i,
+            child,
+        };
+    });
+
+    return ret;
 }
 
 function diffAttributes(left, right, actions)

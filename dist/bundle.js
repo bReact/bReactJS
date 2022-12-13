@@ -80,78 +80,6 @@ function triggerEvent(el, type)
     }
 }
 
-function foreach(obj, callback, args)
-{
-    var value, i = 0,
-        length = obj.length,
-        isArray = Object.prototype.toString.call(obj) === '[object Array]';
-
-    var thisArg = typeof args !== 'undefined' && Object.prototype.toString.call(args) !== '[object Array]' ? args : obj;
-
-    if (Object.prototype.toString.call(args) === '[object Array]')
-    {
-        if (isArray)
-        {
-            for (; i < length; i++)
-            {
-                var _currArgs = [i, obj[i]];
-
-                value = callback.apply(thisArg, array_merge([i, obj[i]], args));
-
-                if (value === false)
-                {
-                    break;
-                }
-            }
-        }
-        else
-        {
-            for (i in obj)
-            {
-                var _currArgs = [i, obj[i]];
-
-                value = callback.apply(thisArg, array_merge([i, obj[i]], args));
-
-                if (value === false)
-                {
-                    break;
-                }
-            }
-        }
-
-        // A special, fast, case for the most common use of each
-    }
-    else
-    {
-        if (isArray)
-        {
-            for (; i < length; i++)
-            {
-                value = callback.call(thisArg, i, obj[i]);
-
-                if (value === false)
-                {
-                    break;
-                }
-            }
-        }
-        else
-        {
-            for (i in obj)
-            {
-                value = callback.call(thisArg, i, obj[i]);
-
-                if (value === false)
-                {
-                    break;
-                }
-            }
-        }
-    }
-
-    return obj;
-}
-
  /**
  * Set a key using dot/bracket notation on an object or array
  *
@@ -589,27 +517,58 @@ function bool(mixed_var)
 {
     mixed_var = (typeof mixed_var === 'undefined' ? false : mixed_var);
 
-    if (typeof mixed_var === 'boolean')
+    if (is_bool(mixed_var))
     {
         return mixed_var;
     }
 
-    if (typeof mixed_var === 'number')
+    if (is_number(mixed_var))
     {
         return mixed_var > 0;
+    }
+
+    if (is_array(mixed_var))
+    {
+        return mixed_var.length > 0;
+    }
+
+    if (is_object(mixed_var))
+    {
+        return Object.keys(mixed_var).length > 0;
     }
 
     if (typeof mixed_var === 'string')
     {
         mixed_var = mixed_var.toLowerCase().trim();
 
-        if (mixed_var === 'false') return false;
-        if (mixed_var === 'true') return true;
-        if (mixed_var === 'on') return true;
-        if (mixed_var === 'off') return false;
-        if (mixed_var === 'undefined') return false;
-        if (is_numeric(mixed_var)) return Number(mixed_var) > 0;
-        if (mixed_var === '') return false;
+        if (mixed_var === 'false')
+        {
+            return false;
+        }
+        if (mixed_var === 'true')
+        {
+            return true;
+        }
+        if (mixed_var === 'on')
+        {
+            return true;
+        }
+        if (mixed_var === 'off')
+        {
+            return false;
+        }
+        if (mixed_var === 'undefined')
+        {
+            return false;
+        }
+        if (is_numeric(mixed_var))
+        {
+            return Number(mixed_var) > 0;
+        }
+        if (mixed_var === '')
+        {
+            return false;
+        }
     }
 
     return false;
@@ -623,12 +582,7 @@ function bool(mixed_var)
  */
 function is_object(mixed_var)
 {
-    if (Object.prototype.toString.call(mixed_var) === '[object Array]')
-    {
-        return false;
-    }
-
-    return mixed_var !== null && typeof mixed_var === 'object';
+    return mixed_var !== null && (Object.prototype.toString.call(mixed_var) === '[object Object]');
 }
 
 /**
@@ -637,9 +591,13 @@ function is_object(mixed_var)
  * @param  mixed mixed_var Variable to test
  * @return bool
  */
-function is_array(mixed_var)
+function is_array(mixed_var, strict)
 {
-    return typeof mixed_var !== 'undefined' && (Object.prototype.toString.call(mixed_var) === '[object Array]' || Object.prototype.toString.call(mixed_var) === '[object NodeList]');
+    strict = typeof strict === 'undefined' ? false : strict;
+
+    let type = Object.prototype.toString.call(mixed_var);
+
+    return !strict ? type === '[object Array]' || type === '[object Arguments]' || type === '[object NodeList]' : type === '[object Array]';
 }
 
 /**
@@ -879,21 +837,6 @@ function cloneArray(arr)
 
 function cloneDeep(mixed_var, context)
 {
-    /*
-    const argsTag    = '[object Arguments]'
-    const arrayTag   = '[object Array]'
-    const boolTag    = '[object Boolean]'
-    const dateTag    = '[object Date]'
-    const errorTag   = '[object Error]'
-    const mapTag     = '[object Map]'
-    const numberTag  = '[object Number]'
-    const objectTag  = '[object Object]'
-    const regexpTag  = '[object RegExp]'
-    const setTag     = '[object Set]'
-    const stringTag  = '[object String]'
-    const symbolTag  = '[object Symbol]'
-    const weakMapTag = '[object WeakMap]'*/
-
     if (is_object(mixed_var))
     {
         return cloneObj(mixed_var);
@@ -973,28 +916,103 @@ function mergeDeep(target, ...sources)
     return mergeDeep(target, ...sources);
 }
 
+function foreach(obj, callback, args)
+{
+    var value, i = 0,
+        length = obj.length,
+        isArray = Object.prototype.toString.call(obj) === '[object Array]';
+
+    var thisArg = typeof args !== 'undefined' && Object.prototype.toString.call(args) !== '[object Array]' ? args : obj;
+
+    if (Object.prototype.toString.call(args) === '[object Array]')
+    {
+        if (isArray)
+        {
+            for (; i < length; i++)
+            {
+                value = callback.apply(thisArg, array_merge([i, obj[i]], args));
+
+                if (value === false)
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            for (i in obj)
+            {
+                value = callback.apply(thisArg, array_merge([i, obj[i]], args));
+
+                if (value === false)
+                {
+                    break;
+                }
+            }
+        }
+
+        // A special, fast, case for the most common use of each
+    }
+    else
+    {
+        if (isArray)
+        {
+            for (; i < length; i++)
+            {
+                value = callback.call(thisArg, i, obj[i]);
+
+                if (value === false)
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            for (i in obj)
+            {
+                value = callback.call(thisArg, i, obj[i]);
+
+                if (value === false)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    return obj;
+}
+
 /**
  * Map with break
  * 
  * return undefined to break loop, true to keep, false to reject
  * 
- * @param [{Array}|{Objet}] arrayOrObj Object or array
- * @param {Function}        callback   Callback
- * @param {context}         context    callback context (optional)
+ * @param [{Array}|{Objet}]     arrayOrObj Object or array
+ * @param {Function}            callback   Callback
+ * @param {{Array}|{undefined}} context    Args to apply to callback
  * 
  * // callback(value, keyOrIndex) this = context 
  */
-function map(arrayOrObj, callback, context)
+function map(obj, callback, args)
 {
-    context = typeof context === 'undefined' ? arrayOrObj : context;
+    let arrType = is_array(obj) ? 'array' : 'obj';
+    let ret     = arrType === 'array' ? [] : {};
+    let keys    = arrType === 'array' ? Array.from(obj.keys()) : Object.keys(obj);
+    let len     = keys.length;
 
-    if (is_array(arrayOrObj))
+    var thisArg = !is_undefined(args) && !is_array(args) ? args : obj;
+    
+    // This arg gets set to array/object, unless a single arg is provided...
+
+    if (is_array(args))
     {
-        var ret = [];
-
-        for (var i = 0; i < arrayOrObj.length; i++)
+        for (let i = 0; i < len; i++)
         {
-            var value = callback.call(context, arrayOrObj[i], i);
+            let key = keys[i];
+
+            let value = callback.apply(thisArg, array_merge([ key, obj[key] ], args));
 
             if (value === false)
             {
@@ -1004,39 +1022,37 @@ function map(arrayOrObj, callback, context)
             {
                 break;
             }
-            else if (value)
+            else
             {
-                ret.push(value);
+                arrType === 'array' ? ret.push(value) : ret[key] = value;
             }
         }
-
-        return ret;
+        // A special, fast, case for the most common use of each
     }
     else
     {
-        var ret = {};
-
-        for (var key in arrayOrObj)
+        for (let i = 0; i < len; i++)
         {
-            if (arrayOrObj.hasOwnProperty(key))
-            {
-                var value = callback.call(context, arrayOrObj[key], key);
+            let key = keys[i];
 
-                if (value === false)
-                {
-                    continue;
-                }
-                else if (typeof value === 'undefined')
-                {
-                    break;
-                }
-                else if (value)
-                {
-                    ret[key] = value;
-                }
+            let value = callback.call(thisArg, key, obj[key]);
+
+            if (value === false)
+            {
+                continue;
+            }
+            else if (typeof value === 'undefined')
+            {
+                break;
+            }
+            else
+            {
+                arrType === 'array' ? ret.push(value) : ret[key] = value;
             }
         }
     }
+
+    return ret;
 }
 
 
@@ -1108,8 +1124,10 @@ function createElement(tag, props, ...children)
         {
             ref = props[i];
         }
-        
-        normalizedProps[i] = props[i];
+        else
+        {
+            normalizedProps[i] = props[i];
+        }
     }
 
     children = typeof children === 'undefined' ? [] : children;
@@ -1123,11 +1141,11 @@ function createElement(tag, props, ...children)
 
     // If a Component VNode, check for and apply defaultProps
     // Note: type may be undefined in development, must never error here.
-    if (typeof tag == 'function' && tag.defaultProps != null)
+    if (utils.is_callable(tag) && utils.is_object(tag.defaultProps))
     {
         for (i in tag.defaultProps)
         {
-            if (normalizedProps[i] === undefined)
+            if (utils.is_undefined(normalizedProps[i]))
             {
                 normalizedProps[i] = tag.defaultProps[i];
             }
@@ -1149,8 +1167,7 @@ function createElement(tag, props, ...children)
         __internals:
         {
             _domEl: null,
-            _path: '',
-            _prevAttrs: '',
+            _prevAttrs: ''
         }
     }
 }
@@ -1161,13 +1178,17 @@ function createElement(tag, props, ...children)
  * - Flattens nested fragments
  * - Converts raw strings and numbers into vnodes
  * - Filters out undefined elements
+ * - Fragments that are nested inside an normal node
+ * - are essentially just array containers, so they get flattened here.
+ * - if a component returns a fragment however that gets handled
+ * - during the commit/patch/create stages.
  */
 
-function normaliseChildren(children, offset, checkKeys)
+function normaliseChildren(children, checkKeys)
 {    
-    offset = typeof offset === 'undefined' ? 0 : offset;
+    checkKeys = utils.is_undefined(checkKeys) ? false : checkKeys;
 
-    checkKeys = typeof offset === 'undefined' ? false : checkKeys;
+    let fragmentcount = 0;
 
     var ret = [];
 
@@ -1175,42 +1196,59 @@ function normaliseChildren(children, offset, checkKeys)
     {
         utils.foreach(children, function(i, vnode)
         {
-            if (checkKeys && !vnode.key)
+            if (utils.is_null(vnode) || utils.is_undefined(vnode))
+            {
+                ret.push(createEmptyElement());
+            }
+            else if (checkKeys && !vnode.key)
             {
                 throw new Error('Each child in a list should have a unique "key" prop.')
             }
-            
-            let _key = '|' + (offset + i);
-
-            if (utils.is_string(vnode) || utils.is_number(vnode))
+            else if (utils.is_string(vnode) || utils.is_number(vnode))
             {
-                ret.push(createTextElement(vnode, _key))
-            }
-            else if (utils.is_empty(vnode))
-            {
-                ret.push(createEmptyElement(_key))
+                ret.push(createTextElement(vnode, null));
             }
             else if (utils.is_array(vnode))
             {                
-                vnode = normaliseChildren(vnode, ret.length, true);
+                let _children = normaliseChildren(vnode, true);
                 
-                utils.array_merge(ret, vnode);
+                utils.array_merge(ret, _children);
             }
             else if (isFragment(vnode))
             {       
-                vnode = normaliseChildren(vnode.children, ret.length);
+                squashFragment(vnode, ret, fragmentcount);
 
-                utils.array_merge(ret, vnode);
+                fragmentcount++;
             }
             else
             {
                 ret.push(vnode);
             }
-           
         });
     }
+
+    return utils.is_empty(ret) ? [createEmptyElement()] : filterChildren(ret);
+}
+
+function squashFragment(fragment, ret, fCount)
+{
+    let basekey = !fragment.key ? `f_${fCount}` : fragment.key;
+
+    let _children = normaliseChildren(fragment.children, false);
+
+    utils.foreach(_children, function(i, vnode)
+    {
+        vnode.key = `${basekey}|${i}`;
+    });
+
+    let foo = utils.map(_children, function(i, child)
+    {
+        return child.key;
+    });
+
+    console.log(foo);
     
-    return utils.is_empty(ret) ? [createEmptyElement('|0')] : filterChildren(ret);
+    utils.array_merge(ret, _children);
 }
 
 /**
@@ -1249,8 +1287,7 @@ function createTextElement(text, key)
         key : key,
         __internals:
         {
-            _domEl: null,
-            _path: '',
+            _domEl: null
         }
     }
 }
@@ -1259,15 +1296,14 @@ function createTextElement(text, key)
  * Text nodes are stored as objects to keep things simple
  */
 
-function createEmptyElement(key)
+function createEmptyElement()
 {
     return {
         type: 'empty',
-        key: key,
+        key: null,
         __internals:
         {
-            _domEl: null,
-            _path: '',
+            _domEl: null
         }
     }
 }
@@ -1290,8 +1326,7 @@ function createThunkElement(fn, props, children, key, ref)
         {
             _domEl: null,
             _component: null,
-            _name : utils.callable_name(fn),
-            _path  : '',
+            _name : utils.callable_name(fn)
         }
     }
 }
@@ -1311,6 +1346,13 @@ function patchVnode(left, right)
     {
         left[key] = right[key];
     }
+
+    patchKeys(left);
+}
+
+function patchKeys(vnode)
+{
+
 }
 
 /**
@@ -1396,24 +1438,6 @@ let isNestingFragment = (node) =>
     return false;
 }
 
-let prevPath = function(vnode)
-{
-    let path = nodePath(vnode).split('.');
-
-    path.pop();
-
-    return path.join('.');
-}
-
-/**
- * Create a node path, eg. (23,5,2,4) => '23.5.2.4'
- */
-
-let createPath = (...args) =>
-{
-    return args.join('.');
-}
-
 /**
  * Returns thunk function / class name
  */
@@ -1421,20 +1445,6 @@ let createPath = (...args) =>
 let thunkName = (node) =>
 {
     return node.__internals._name;
-}
-
-/**
- * Get/set a nodes path
- */
-
-let nodePath = (node, path) =>
-{
-    if (!utils.is_undefined(path))
-    {
-        node.__internals._path = path + '';
-    }
-
-    return node.__internals._path;
 }
 
 /**
@@ -1446,9 +1456,26 @@ let nodeElem = (node, elem) =>
     if (!utils.is_undefined(elem))
     {
         node.__internals._domEl = elem;
+
+        return elem;
+    }
+
+    if (isThunk(node) || isFragment(node))
+    {
+        return findThunkDomEl(node);
     }
 
     return node.__internals._domEl;
+}
+
+let parentElem = (node) =>
+{
+    if (isNative(node) || isText(node) || isEmpty(node))
+    {
+        return nodeElem(node).parentNode;
+    }
+    
+    return findThunkParentDomEl(node);
 }
 
 /**
@@ -1481,11 +1508,58 @@ let nodeComponent = (node, component) =>
     return node.__internals._component;
 }
 
+// Recursively traverse down tree until either a DOM node is found
+// or a fragment is found and return it's children
+
+function findThunkDomEl(vnode)
+{
+    let child = vnode.children[0];
+
+    if (isNative(child) || isText(child) || isEmpty(child))
+    {
+        return nodeElem(child);
+    }
+
+    while (isThunk(child) || isFragment(child))
+    {
+        vnode = child;
+        child = child.children[0];
+    }
+
+    return isFragment(vnode) ? 
+        utils.map(vnode.children, function(i, child)
+        { 
+            return nodeElem(child); 
+        }) 
+        : nodeElem(vnode);
+}
+
+// Recursively traverse down tree until either a DOM node is found
+// or a fragment is found and return it's children
+
+function findThunkParentDomEl(vnode)
+{
+    let child = vnode.children[0];
+
+    if (isNative(child) || isText(child) || isEmpty(child))
+    {
+        return nodeElem(child).parentNode;
+    }
+
+    while (isThunk(child) || isFragment(child))
+    {
+        vnode = child;
+        child = child.children[0];
+    }
+
+    return isFragment(vnode) ? nodeElem(vnode.children[0]).parentNode : nodeElem(vnode).parentNode;
+}
+
 /**
  * Points vnode -> component and component -> vndode
  */
 
-let pointVnodeThunk = (vnode, component, parentVnode) =>
+let pointVnodeThunk = (vnode, component) =>
 {
     // point vnode -> component
     vnode.__internals._component = component;
@@ -1497,30 +1571,6 @@ let pointVnodeThunk = (vnode, component, parentVnode) =>
     if (component.props && component.props.children)
     {
         vnode.children = component.props.children;
-
-        if (isNestingFragment(vnode))
-        {
-            pointNestedFragment(vnode, parentVnode);
-        }
-        else
-        {
-            // Point .node.__internals._domEl -> component -> first nodeElement
-            nodeElem(vnode, findThunkDomEl(vnode));
-        }
-    }
-}
-
-function pointNestedFragment(vnode, parentVnode)
-{
-    let DOMElement = nodeElem(parentVnode);
-
-    nodeElem(vnode, DOMElement);
-
-    while (!isFragment(vnode))
-    {
-        vnode = vnode.children[0];
-
-        nodeElem(vnode, DOMElement);
     }
 }
 
@@ -1540,17 +1590,6 @@ function patchVnodes(left, right)
         }
     });
 }
-
-/**
- * Recursively calls unmount on nested components
- * in a sub tree
- */
-
-let nodeWillMount = (vnode) =>
-{
-    
-}
-
 
 /**
  * Recursively calls unmount on nested components
@@ -1585,31 +1624,7 @@ let nodeWillUnmount = (vnode) =>
     }
 }
 
-function findThunkDomEl(node)
-{
-    while (node && isThunk(node))
-    {
-        if (isThunkInstantiated(node))
-        {
-            node = node.__internals._component.props.children[0];
-        }
-        else
-        {
-            return null;
-        }
-    }
 
-    return nodeElem(node);
-}
-
-/**
- * Empty node children
- */
-
-let emptyChildren = (node) =>
-{
-   
-}
 
 /* harmony default export */ const vdom_element = ((/* unused pure expression or super */ null && (createElement)));
 ;// CONCATENATED MODULE: ./src/js/dom/jsx/Parser.js
@@ -2292,11 +2307,6 @@ function patch(prevNode, nextNode, actions)
     {
         // nothing to do
     }
-    // Replace empty -> empty, empty -> something (excludes thunks which need to be rendered)
-    else if (((!isEmpty(prevNode) && isEmpty(nextNode) || isEmpty(prevNode) && !isEmpty(nextNode))) && nextNode.type !== 'thunk')
-    {
-        replaceNode(prevNode, nextNode, actions);
-    }
     else if (prevNode.type !== nextNode.type)
     {
         replaceNode(prevNode, nextNode, actions);
@@ -2319,7 +2329,7 @@ function patch(prevNode, nextNode, actions)
     }
     else if (isEmpty(nextNode))
     {
-        // nothing to do
+        replaceNode(prevNode, nextNode, actions);
     }
 }
 
@@ -2344,7 +2354,9 @@ function replaceNode(left, right, actions)
         }
         else
         {
-            thunkInstantiate(right);
+            let component = thunkInstantiate(right);
+
+            pointVnodeThunk(vnode, component);
         }
     }
 
@@ -2398,35 +2410,17 @@ function patchThunk(left, right, actions)
     // Different components
     else
     {
-        thunkInstantiate(right);
+        let component = thunkInstantiate(right);
+
+        pointVnodeThunk(vnode, component);
 
         actions.push(action('replaceNode', [left, right]));
     }
 }
 
-function patchFragment(prevNode, nextNode, parentDOMElement)
+function patchFragment(left, right, actions)
 {
-    
-}
-
-function groupByKey(children)
-{
-    let ret = {};
-
-    utils.foreach(children, function(i, child)
-    {
-        let { key } = child;
-
-        key = !key ? ('|' + i) : key;
-
-        ret[key] =
-        {
-            index: i,
-            child,
-        };
-    });
-
-    return ret;
+    patchChildren(left, right, actions);
 }
 
 /**
@@ -2513,7 +2507,7 @@ function patchChildren(left, right, actions)
             utils.foreach(lChildren, function(i, lChild)
             {
                 if (lChild.key === rChildren[0].key)
-                {
+                {                    
                     patch(lChild, rChildren[0], actions);
 
                     matchedKey = true;
@@ -2597,15 +2591,19 @@ function diffChildren(left, right, actions)
     let rGroup = groupByKey(right.children);
     let actionsStartIndex = actions.length > 0 ? actions.length : 0;
     let subActions = [];
+    let inserted = 0;
 
     // Note we should still patch indivdual children etc.. but check keys
 
     // Special case if keys are exactly the same we can just patch each child
-    let lKeys = Object.keys(lGroup).sort();
-    let rKeys = Object.keys(rGroup).sort();
+    let lKeys = Object.keys(lGroup);
+    let rKeys = Object.keys(rGroup);
+
+    console.log(lKeys);
+    console.log(rKeys);
 
     if (utils.is_equal(lKeys, rKeys))
-    {
+    {        
         utils.foreach(right.children, function(i, rChild)
         {
             patch(left.children[i], rChild, actions);
@@ -2613,9 +2611,7 @@ function diffChildren(left, right, actions)
 
         return;
     }
-
-    let inserted = 0;
-
+   
     // Loop right children
     // Note insertAtIndex & removeChild to be executed before moveToIndex
     // otherwise moveToIndex will be incorrect
@@ -2688,6 +2684,51 @@ function diffChildren(left, right, actions)
     }
 }
 
+// We need to key thunks by name / count here
+// so they get patched rather than remounted
+
+function groupByKey(children)
+{
+    let ret   = {};
+    let thunks = {};
+
+    utils.foreach(children, function(i, child)
+    {
+        let { key } = child;
+
+        // This stop thunks from reinstating when they don't need to
+        if (isThunk(child) && !key)
+        {
+            let name = thunkName(child);
+
+            if (!utils.is_undefined(thunks[name]))
+            {
+                key = name + '_' + (thunks[name] + 1);
+
+                thunks[name]++;
+            }
+            else
+            {
+                key = name;
+
+                thunks[name] = 1;
+            }
+        }
+        else
+        {
+            key = !key ? ('|' + i) : key;
+        }
+
+        ret[key] =
+        {
+            index: i,
+            child,
+        };
+    });
+
+    return ret;
+}
+
 function diffAttributes(left, right, actions)
 {
     let pAttrs = left.attributes;
@@ -2755,6 +2796,8 @@ function thunkUpdate(vnode)
     {
         commit(actions.current);
     }
+
+    console.log(vnode);
 }
 
 function thunkRender(component)
@@ -3138,6 +3181,11 @@ function setDomAttribute(DOMElement, name, value, previousValue)
 {    
     switch (name)
     {
+        // Skip
+        case 'key':
+        case 'ref':
+            break;
+
         // Style
         case 'style':
             
@@ -3218,6 +3266,11 @@ function removeDomAttribute(DOMElement, name, previousValue)
 {
     switch (name)
     {
+        // Skip
+        case 'key':
+        case 'ref':
+            break;
+
         // Class
         case 'class':
         case 'className':
@@ -3356,7 +3409,7 @@ function _ucfirst(string)
  * so they are treated like any other native element.
  */
 
-function createDomElement(vnode, parentVnode)
+function createDomElement(vnode, parentDOMElement)
 {        
     switch (vnode.type)
     {
@@ -3367,14 +3420,38 @@ function createDomElement(vnode, parentVnode)
             return createTextNode(vnode, '');
         
         case 'thunk':
-            return createThunk(vnode, parentVnode);
+            return flatten(createThunk(vnode, parentDOMElement));
         
         case 'fragment':
-            return createFragment(vnode, parentVnode);
+            return flatten(createFragment(vnode, parentDOMElement));
         
         case 'native':
-            return createHTMLElement(vnode);
+            return flatten(createHTMLElement(vnode));
     }
+}
+
+function flatten(DOMElement)
+{
+    if (utils.is_array(DOMElement))
+    {
+        let ret = [];
+
+        utils.foreach(DOMElement, function(i, child)
+        {
+            if (utils.is_array(child))
+            {
+                utils.array_merge(ret, flatten(child));
+            }
+            else
+            {
+                ret.push(child);
+            }
+        });
+
+        return ret;
+    }
+
+    return DOMElement;
 }
 
 function createTextNode(vnode, text)
@@ -3402,17 +3479,17 @@ function createHTMLElement(vnode)
     utils.foreach(children, function(i, child)
     {
         if (!utils.is_empty(child))
-        {            
-            let childDomElement = createDomElement(child, vnode);
+        {                        
+            let childDOMElem = createDomElement(child, DOMElement);
 
             // Returns a fragment
-            if (utils.is_array(childDomElement))
+            if (utils.is_array(childDOMElem))
             {
-                mountFragment(DOMElement, childDomElement, i);
+                appendFragment(DOMElement, childDOMElem);
             }
             else
             {
-                DOMElement.appendChild(childDomElement);
+                DOMElement.appendChild(childDOMElem);
             }
         }
     });
@@ -3421,32 +3498,30 @@ function createHTMLElement(vnode)
 }
 
 /* Handles nested fragments */
-function mountFragment(DOMElement, children, index)
-{
+function appendFragment(parentDOMElement, children)
+{    
     if (utils.is_array(children))
     {
         utils.foreach(children, function(i, child)
         {
-            mountFragment(DOMElement, child, index);
+            appendFragment(parentDOMElement, child);
         });
     }
 
     if (utils.is_htmlElement(children))
     {
-        DOMElement.appendChild(children);
-
-        return;
+        parentDOMElement.appendChild(children);
     }
 }
 
-function createThunk(vnode, parentVnode)
+function createThunk(vnode, parentDOMElement)
 {
     // Skip this it's already been rendered if it's coming from a patch
     if (isThunkInstantiated(vnode))
     {
-        let DOMElement = createDomElement(vnode.children[0], vnode);
+        console.log('already instantiated');
 
-        nodeElem(vnode, DOMElement);
+        let DOMElement = createDomElement(vnode.children[0]);
 
         return DOMElement;
     }
@@ -3455,26 +3530,22 @@ function createThunk(vnode, parentVnode)
 
     let component = thunkInstantiate(vnode);
 
-    let DOMElement = createDomElement(component.props.children[0], vnode);
+    // Create entire tree recursively
+    let DOMElement = createDomElement(component.props.children[0]);
 
-    pointVnodeThunk(vnode, component, parentVnode);
-    
-    // returned a fragment or a component that returned a fragment
-    if (!utils.is_htmlElement(DOMElement))
-    {
-        nodeElem(vnode, DOMElement);
-    }
+    // Point vnode
+    pointVnodeThunk(vnode, component);
 
     return DOMElement;
 }
 
-function createFragment(vnode, parentVnode)
+function createFragment(vnode, parentDOMElement)
 {    
     let ret = [];
 
-    utils.foreach(vnode.children, function(i, node)
+    utils.foreach(vnode.children, function(i, child)
     {
-        ret.push(createDomElement(node, parentVnode));
+        ret.push(createDomElement(child));
     });
 
     return ret;
@@ -3512,27 +3583,125 @@ function commit_replaceNode(left, right)
 
     removeEvents(left);
 
-    // todo fix path
-    let DOMElement = createDomElement(right, nodePath(left));
+    let rDOMElement = createDomElement(right);
 
     let lDOMElement = nodeElem(left);
 
-    lDOMElement.parentNode.replaceChild(DOMElement, lDOMElement);
+    let parentDOMElement = parentElem(left);
+
+    // We don't care if left or right is a thunk or fragment here
+    // all we care about are the nodes returned from createDomElement()
+
+    // left fragment nodes
+    if (utils.is_array(lDOMElement))
+    {
+        // right multiple nodes also
+        if (utils.is_array(rDOMElement))
+        {
+            utils.foreach(lDOMElement, function(i, lChild)
+            {
+                let rChild = rDOMElement[i];
+
+                if (rChild)
+                {
+                    parentDOMElement.replaceChild(rChild, lChild);
+                }
+                else
+                {
+                    parentDOMElement.removeChild(lChild);
+                }
+            });
+        }
+        else
+        {
+            parentDOMElement.replaceChild(rDOMElement, lDOMElement.shift());
+
+            if (!utils.is_empty(lDOMElement))
+            {
+                utils.foreach(lDOMElement, function(i, lChild)
+                {
+                    parentDOMElement.removeChild(lChild);
+                });
+            }
+        }
+    }
+    // left single node
+    else
+    {
+        // right multiple nodes
+        if (utils.is_array(rDOMElement))
+        {
+            let targetSibling = lDOMElement.nextSibling;
+
+            // Replace first node
+            parentDOMElement.replaceChild(rDOMElement.shift(), lDOMElement);
+
+            // Insert the rest at index
+            if (!utils.is_empty(rDOMElement))
+            {
+                utils.foreach(rDOMElement, function(i, rChild)
+                {
+                    if (targetSibling)
+                    {
+                        parentDOMElement.insertBefore(rChild, targetSibling);
+                    }
+                    else
+                    {
+                        parentDOMElement.appendChild(rChild);
+                    }
+                });
+            }
+        }
+        else
+        {
+            parentDOMElement.replaceChild(rDOMElement, lDOMElement);
+        }
+    }
 
     patchVnodes(left, right);
 }
 
 function appendChild(parentVnode, vnode)
 {
-    // todo fix path
-    let index = utils.size(parentVnode.children);
-    let basePath = nodePath(parentVnode);
+    let parentDOMElement = nodeElem(parentVnode);
 
-    let DOMElement = createDomElement(vnode, basePath + '.' + index);
+    let DOMElement = createDomElement(vnode);
 
-    nodeElem(parentVnode).appendChild(DOMElement);
+    // What if we're appending into a fragment ?
+    if (utils.is_array(parentDOMElement))
+    {
+        parentDOMElement = parentDOMElement[0].parentNode;
+
+        if (utils.is_array(DOMElement))
+        {
+            utils.foreach(DOMElement, function(i, child)
+            {
+                parentDOMElement.appendChild(child);
+            });
+        }
+        else
+        {
+            parentDOMElement.appendChild(DOMElement);
+        }
+    }
+    else
+    {
+        if (utils.is_array(DOMElement))
+        {
+            utils.foreach(DOMElement, function(i, child)
+            {                
+                parentDOMElement.appendChild(child);
+            });
+        }
+        else
+        {
+            parentDOMElement.appendChild(DOMElement);
+        }
+    }
 
     parentVnode.children.push(vnode);
+
+    patchKeys(parentVnode);
 }
 
 function removeChild(parentVnode, vnode)
@@ -3541,17 +3710,23 @@ function removeChild(parentVnode, vnode)
 
     removeEvents(vnode);
 
-    utils.foreach(parentVnode.children, function(i, child)
+    let parentDOMElement = parentElem(vnode);
+
+    let DOMElement = nodeElem(vnode);
+
+    if (utils.is_array(DOMElement))
     {
-        if (child === vnode)
-        {            
-            parentVnode.children.splice(i, 1);
+        utils.foreach(DOMElement, function(i, child)
+        {
+            parentDOMElement.removeChild(child);
+        });
+    }
+    else
+    {
+        parentDOMElement.removeChild(DOMElement);
+    }
 
-            return false;
-        }
-    });
-
-    nodeElem(parentVnode).removeChild(nodeElem(vnode));
+    parentVnode.children.splice(parentVnode.children.indexOf(vnode), 1);
 }
 
 function removeEvents(vnode)
@@ -3587,38 +3762,75 @@ function removeEvents(vnode)
 
 function insertAtIndex(parentVnode, vnode, index)
 {
-    // Node vdom indexes and DOM indexes may be different because thunks
-    // can render multiple children
+    let DOMElement = createDomElement(vnode);
 
-    let path = nodePath(parentVnode) + '.' + index;
+    let parentDOMElement = getUnknownParent(parentVnode);
 
-    let DOMElement = createDomElement(vnode, path);
-
-    let parentDOMElement = nodeElem(parentVnode);
-
-    if (index >= parentDOMElement.children.length)
+    if (utils.is_array(DOMElement))
     {
-        parentDOMElement.appendChild(DOMElement);
+        utils.foreach(DOMElement, function(i, child)
+        {
+            if (index >= parentDOMElement.children.length)
+            {
+                parentDOMElement.appendChild(child);
+            }
+            else
+            {
+                parentDOMElement.insertBefore(child, parentDOMElement.children[index]);
+            }
+
+            index++;
+        });
     }
     else
     {
-        parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[index]);
+        if (index >= parentDOMElement.children.length)
+        {
+            parentDOMElement.appendChild(DOMElement);
+        }
+        else
+        {
+            parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[index]);
+        }
     }
 
     parentVnode.children.splice(index, 0, vnode);
+
+    patchKeys(parentVnode);
+}
+
+function getUnknownParent(parent)
+{
+    let nodeEl = nodeElem(parent);
+
+    if (utils.is_array(nodeEl))
+    {
+        return nodeEl[0].parentNode;
+    }
+
+    return nodeEl;
 }
 
 function moveToIndex(parentVnode, vnode, index)
 {
     let DOMElement       = nodeElem(vnode);
-    let parentDOMElement = DOMElement.parentNode;
+    let isFragment       = utils.is_array(DOMElement);
+    let parentDOMElement = isFragment ? DOMElement[0].parentNode : DOMElement.parentNode;
     let currIndex        = Array.prototype.slice.call(parentDOMElement.children).indexOf(DOMElement);
+    
+    if (isFragment)
+    {
+        moveFragmentDomEls(parentDOMElement, DOMElement, index, currIndex);
+
+        return;
+    }
 
     // Nothing to do
     if (currIndex === index || (index === 0 && parentDOMElement.children.length === 0))
     {
         
     }
+    // Move to start
     else if (index === 0)
     {
         parentDOMElement.insertBefore(DOMElement, parentDOMElement.firstChild);
@@ -3646,6 +3858,42 @@ function moveToIndex(parentVnode, vnode, index)
     else
     {
         vChildren.splice(index, 0, vChildren.splice(vCurrIndex, 1)[0]);
+    }
+}
+
+function moveFragmentDomEls(parentDOMElement, DOMElements, index, currIndex)
+{
+    // Nothing to do
+    if (currIndex === index || (index === 0 && parentDOMElement.children.length === 0))
+    {
+        return;
+    }
+    
+    // Move to start
+    if (index === 0)
+    {
+        utils.foreach(DOMElements, function(i, child)
+        {
+            parentDOMElement.insertBefore(child, parentDOMElement.children[i]);
+        });
+    }
+    // Move to end
+    else if (index >= parentDOMElement.children.length)
+    { 
+        utils.foreach(DOMElements, function(i, child)
+        {
+            parentDOMElement.removeChild(child);
+            parentDOMElement.appendChild(child);
+        });
+    }
+    else
+    {
+        utils.foreach(DOMElements, function(i, child)
+        {
+            parentDOMElement.insertBefore(child, parentDOMElement.children[index]);
+
+            index++;
+        });
     }
 }
 
@@ -3949,11 +4197,34 @@ class Fragment extends Component
     class FragmentNest1 extends Component
     {
         FragmentNest2 = FragmentNest2;
+        Fragment = Fragment;
         
         render()
         {
             return `
-                <FragmentNest2 />
+                <Fragment>
+                    <FragmentNest2 />
+                </Fragment>
+            `;
+        }
+    }
+
+    class ThunkNest2 extends Component
+    {        
+        render()
+        {
+            return `<div>ThunkNest2</div>`;
+        }
+    }
+
+    class ThunkNest1 extends Component
+    {
+        ThunkNest2 = ThunkNest2;
+        
+        render()
+        {
+            return `
+                <ThunkNest2 />
             `;
         }
     }
@@ -3971,6 +4242,7 @@ class Fragment extends Component
             this.Bar         = Bar;
             this.numbers     = [1, 2, 3, 4, 5];
             this.nested      = 'Nested from Foo!';
+            this.ThunkNest1  = ThunkNest1;
             this.Nest1       = Nest1;
             this.Nest2       = Nest2;
             this.variable    = 'interpolated variable';
@@ -3992,11 +4264,11 @@ class Fragment extends Component
 
             console.log('Constructing Foo')
 
-            /*setInterval(function()
+            setInterval(function()
             {
                 _this.tick();
 
-            }, 1000);*/
+            }, 1000);
         }
 
         tick()
@@ -4029,16 +4301,44 @@ class Fragment extends Component
 
         render()
         {
+            /*return `
+                <section>
+                    <ThunkNest1 />
+                </section>
+            `;*/
+
+           /* if (this.state.counter === 2)
+            {
+               return `
+                     <div>
+                        1. One
+                        <FragmentNest1 />
+                        <Fragment>
+                            <section>Test 1.</section>
+                            <section>Test 2.</section>
+                        </Fragment>
+                        2. Two
+                        <FragmentNest1 />
+                    </div>
+                `;
+            }*/
+
             return `
-                 <div>
-                    1. One
+                <div>
+                    <FragmentNest1 key="test" />
+                    <Fragment>
+                        <ThunkNest1 />
+                        <i>test</i>
+                    </Fragment>
                     <FragmentNest1 />
-                    2. Two
-                    <FragmentNest1 />
+                    <Fragment key="mykey">
+                        <div>Test 1.</div>
+                        <div>Test 2.</div>
+                    </Fragment>
+                    Foo
+                    <div key="testnative"><div>
                 </div>
             `;
-
-            console.log('rending Foo');
 
            /* if (this.state.counter === 2)
             {

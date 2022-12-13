@@ -50,78 +50,6 @@ export function triggerEvent(el, type)
     }
 }
 
-export function foreach(obj, callback, args)
-{
-    var value, i = 0,
-        length = obj.length,
-        isArray = Object.prototype.toString.call(obj) === '[object Array]';
-
-    var thisArg = typeof args !== 'undefined' && Object.prototype.toString.call(args) !== '[object Array]' ? args : obj;
-
-    if (Object.prototype.toString.call(args) === '[object Array]')
-    {
-        if (isArray)
-        {
-            for (; i < length; i++)
-            {
-                var _currArgs = [i, obj[i]];
-
-                value = callback.apply(thisArg, array_merge([i, obj[i]], args));
-
-                if (value === false)
-                {
-                    break;
-                }
-            }
-        }
-        else
-        {
-            for (i in obj)
-            {
-                var _currArgs = [i, obj[i]];
-
-                value = callback.apply(thisArg, array_merge([i, obj[i]], args));
-
-                if (value === false)
-                {
-                    break;
-                }
-            }
-        }
-
-        // A special, fast, case for the most common use of each
-    }
-    else
-    {
-        if (isArray)
-        {
-            for (; i < length; i++)
-            {
-                value = callback.call(thisArg, i, obj[i]);
-
-                if (value === false)
-                {
-                    break;
-                }
-            }
-        }
-        else
-        {
-            for (i in obj)
-            {
-                value = callback.call(thisArg, i, obj[i]);
-
-                if (value === false)
-                {
-                    break;
-                }
-            }
-        }
-    }
-
-    return obj;
-}
-
  /**
  * Set a key using dot/bracket notation on an object or array
  *
@@ -559,27 +487,58 @@ export function bool(mixed_var)
 {
     mixed_var = (typeof mixed_var === 'undefined' ? false : mixed_var);
 
-    if (typeof mixed_var === 'boolean')
+    if (is_bool(mixed_var))
     {
         return mixed_var;
     }
 
-    if (typeof mixed_var === 'number')
+    if (is_number(mixed_var))
     {
         return mixed_var > 0;
+    }
+
+    if (is_array(mixed_var))
+    {
+        return mixed_var.length > 0;
+    }
+
+    if (is_object(mixed_var))
+    {
+        return Object.keys(mixed_var).length > 0;
     }
 
     if (typeof mixed_var === 'string')
     {
         mixed_var = mixed_var.toLowerCase().trim();
 
-        if (mixed_var === 'false') return false;
-        if (mixed_var === 'true') return true;
-        if (mixed_var === 'on') return true;
-        if (mixed_var === 'off') return false;
-        if (mixed_var === 'undefined') return false;
-        if (is_numeric(mixed_var)) return Number(mixed_var) > 0;
-        if (mixed_var === '') return false;
+        if (mixed_var === 'false')
+        {
+            return false;
+        }
+        if (mixed_var === 'true')
+        {
+            return true;
+        }
+        if (mixed_var === 'on')
+        {
+            return true;
+        }
+        if (mixed_var === 'off')
+        {
+            return false;
+        }
+        if (mixed_var === 'undefined')
+        {
+            return false;
+        }
+        if (is_numeric(mixed_var))
+        {
+            return Number(mixed_var) > 0;
+        }
+        if (mixed_var === '')
+        {
+            return false;
+        }
     }
 
     return false;
@@ -593,12 +552,7 @@ export function bool(mixed_var)
  */
 export function is_object(mixed_var)
 {
-    if (Object.prototype.toString.call(mixed_var) === '[object Array]')
-    {
-        return false;
-    }
-
-    return mixed_var !== null && typeof mixed_var === 'object';
+    return mixed_var !== null && (Object.prototype.toString.call(mixed_var) === '[object Object]');
 }
 
 /**
@@ -607,9 +561,13 @@ export function is_object(mixed_var)
  * @param  mixed mixed_var Variable to test
  * @return bool
  */
-export function is_array(mixed_var)
+export function is_array(mixed_var, strict)
 {
-    return typeof mixed_var !== 'undefined' && (Object.prototype.toString.call(mixed_var) === '[object Array]' || Object.prototype.toString.call(mixed_var) === '[object NodeList]');
+    strict = typeof strict === 'undefined' ? false : strict;
+
+    let type = Object.prototype.toString.call(mixed_var);
+
+    return !strict ? type === '[object Array]' || type === '[object Arguments]' || type === '[object NodeList]' : type === '[object Array]';
 }
 
 /**
@@ -849,21 +807,6 @@ function cloneArray(arr)
 
 export function cloneDeep(mixed_var, context)
 {
-    /*
-    const argsTag    = '[object Arguments]'
-    const arrayTag   = '[object Array]'
-    const boolTag    = '[object Boolean]'
-    const dateTag    = '[object Date]'
-    const errorTag   = '[object Error]'
-    const mapTag     = '[object Map]'
-    const numberTag  = '[object Number]'
-    const objectTag  = '[object Object]'
-    const regexpTag  = '[object RegExp]'
-    const setTag     = '[object Set]'
-    const stringTag  = '[object String]'
-    const symbolTag  = '[object Symbol]'
-    const weakMapTag = '[object WeakMap]'*/
-
     if (is_object(mixed_var))
     {
         return cloneObj(mixed_var);
@@ -943,28 +886,103 @@ export function mergeDeep(target, ...sources)
     return mergeDeep(target, ...sources);
 }
 
+export function foreach(obj, callback, args)
+{
+    var value, i = 0,
+        length = obj.length,
+        isArray = Object.prototype.toString.call(obj) === '[object Array]';
+
+    var thisArg = typeof args !== 'undefined' && Object.prototype.toString.call(args) !== '[object Array]' ? args : obj;
+
+    if (Object.prototype.toString.call(args) === '[object Array]')
+    {
+        if (isArray)
+        {
+            for (; i < length; i++)
+            {
+                value = callback.apply(thisArg, array_merge([i, obj[i]], args));
+
+                if (value === false)
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            for (i in obj)
+            {
+                value = callback.apply(thisArg, array_merge([i, obj[i]], args));
+
+                if (value === false)
+                {
+                    break;
+                }
+            }
+        }
+
+        // A special, fast, case for the most common use of each
+    }
+    else
+    {
+        if (isArray)
+        {
+            for (; i < length; i++)
+            {
+                value = callback.call(thisArg, i, obj[i]);
+
+                if (value === false)
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            for (i in obj)
+            {
+                value = callback.call(thisArg, i, obj[i]);
+
+                if (value === false)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    return obj;
+}
+
 /**
  * Map with break
  * 
  * return undefined to break loop, true to keep, false to reject
  * 
- * @param [{Array}|{Objet}] arrayOrObj Object or array
- * @param {Function}        callback   Callback
- * @param {context}         context    callback context (optional)
+ * @param [{Array}|{Objet}]     arrayOrObj Object or array
+ * @param {Function}            callback   Callback
+ * @param {{Array}|{undefined}} context    Args to apply to callback
  * 
  * // callback(value, keyOrIndex) this = context 
  */
-export function map(arrayOrObj, callback, context)
+export function map(obj, callback, args)
 {
-    context = typeof context === 'undefined' ? arrayOrObj : context;
+    let arrType = is_array(obj) ? 'array' : 'obj';
+    let ret     = arrType === 'array' ? [] : {};
+    let keys    = arrType === 'array' ? Array.from(obj.keys()) : Object.keys(obj);
+    let len     = keys.length;
 
-    if (is_array(arrayOrObj))
+    var thisArg = !is_undefined(args) && !is_array(args) ? args : obj;
+    
+    // This arg gets set to array/object, unless a single arg is provided...
+
+    if (is_array(args))
     {
-        var ret = [];
-
-        for (var i = 0; i < arrayOrObj.length; i++)
+        for (let i = 0; i < len; i++)
         {
-            var value = callback.call(context, arrayOrObj[i], i);
+            let key = keys[i];
+
+            let value = callback.apply(thisArg, array_merge([ key, obj[key] ], args));
 
             if (value === false)
             {
@@ -974,39 +992,37 @@ export function map(arrayOrObj, callback, context)
             {
                 break;
             }
-            else if (value)
+            else
             {
-                ret.push(value);
+                arrType === 'array' ? ret.push(value) : ret[key] = value;
             }
         }
-
-        return ret;
+        // A special, fast, case for the most common use of each
     }
     else
     {
-        var ret = {};
-
-        for (var key in arrayOrObj)
+        for (let i = 0; i < len; i++)
         {
-            if (arrayOrObj.hasOwnProperty(key))
-            {
-                var value = callback.call(context, arrayOrObj[key], key);
+            let key = keys[i];
 
-                if (value === false)
-                {
-                    continue;
-                }
-                else if (typeof value === 'undefined')
-                {
-                    break;
-                }
-                else if (value)
-                {
-                    ret[key] = value;
-                }
+            let value = callback.call(thisArg, key, obj[key]);
+
+            if (value === false)
+            {
+                continue;
+            }
+            else if (typeof value === 'undefined')
+            {
+                break;
+            }
+            else
+            {
+                arrType === 'array' ? ret.push(value) : ret[key] = value;
             }
         }
     }
+
+    return ret;
 }
 
 
