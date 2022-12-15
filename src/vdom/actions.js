@@ -1,4 +1,4 @@
-import { replaceNode, appendChild, insertAtIndex, moveToIndex, removeChild, replaceText, setAttribute, removeAttribute } from '../dom';
+import { replaceNode, appendChild, insertAtIndex, moveToIndex, removeChild, replaceText, setAttribute, removeAttribute } from '../dom/index';
 
 const ACTION_MAP =
 {

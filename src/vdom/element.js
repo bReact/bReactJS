@@ -1,4 +1,4 @@
-import _ from '../utils';
+import _ from '../utils/index';
 
 /**
  * This function lets us create virtual nodes using a simple
@@ -287,11 +287,6 @@ export let isEmpty = (node) =>
 
 export let noChildren = (node) =>
 {
-    if (!node.children || node.children.length === 0)
-    {
-        return true;
-    }
-
     return node.children.length === 1 && isEmpty(node.children[0]);
 }
 
@@ -364,14 +359,88 @@ export let nodeElem = (node, elem) =>
     return node.__internals._domEl;
 }
 
+/**
+ * Returns the actual parent DOMElement of a parent node.
+ * 
+ */
+
+export let nodeElemParent = (parent) =>
+{
+    if (isFragment(parent) || isThunk(parent))
+    {
+        let child = nodeElem(parent);
+
+        return _.is_array(child) ? child[0].parentNode : child.parentNode;
+    }
+
+    return nodeElem(parent);
+}
+
+/**
+ * Returns the parent DOMElement of a given vnNode
+ * 
+ */
+
 export let parentElem = (node) =>
 {
+    // Native node
     if (isNative(node) || isText(node) || isEmpty(node))
     {
         return nodeElem(node).parentNode;
     }
     
-    return findThunkParentDomEl(node);
+    // Thunks / fragments with a direct child
+    let child = vnode.children[0];
+
+    if (isNative(child) || isText(child) || isEmpty(child))
+    {
+        return nodeElem(child).parentNode;
+    }
+
+    // Recursively traverse down tree until either a DOM node is found
+    // or a fragment is found and return it's parent
+
+    while (isThunk(child) || isFragment(child))
+    {
+        vnode = child;
+        child = child.children[0];
+    }
+
+    return isFragment(vnode) ? nodeElem(vnode.children[0]).parentNode : nodeElem(vnode).parentNode;
+}
+
+/**
+ * Returns the parent DOMElement of a given vnNode
+ * 
+ */
+
+export let childDomIndex = (parent, index) =>
+{
+    if (parent.children.length <= 1)
+    {
+        return 0;
+    }
+
+    let buffer = 0;
+
+    _.foreach(parent.children, function(i, child)
+    {
+        if (vnode === child)
+        {
+            return false;
+        }
+        else if (isThunk(child))
+        {
+            let els = nodeElem(child);
+
+            if (_.is_array(els))
+            {
+                buffer += els.length;
+            }
+        }
+    });
+
+    return buffer + index;
 }
 
 /**
@@ -409,12 +478,12 @@ export let nodeComponent = (node, component) =>
 
 function findThunkDomEl(vnode)
 {
-    let child = vnode.children[0];
-
-    if (isNative(child) || isText(child) || isEmpty(child))
+    if (isNative(vnode) || isText(vnode) || isEmpty(vnode))
     {
-        return nodeElem(child);
+        return nodeElem(vnode);
     }
+
+    let child = vnode.children[0];
 
     while (isThunk(child) || isFragment(child))
     {

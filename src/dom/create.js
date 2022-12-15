@@ -1,7 +1,7 @@
 import createNativeElement from './factory';
-import * as vDOM from '../vdom';
+import * as vDOM from '../vdom/index';
 import { setDomAttribute } from './attributes';
-import _ from '../utils';
+import _ from '../utils/index';
 
 /**
  * Create a real DOM element from a virtual element, recursively looping down.

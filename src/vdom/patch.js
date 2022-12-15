@@ -1,7 +1,7 @@
 import { action } from './actions';
-import * as vElem from '../vdom';
+import * as vElem from './element';
 import * as thunk from './thunk';
-import _ from '../utils';
+import _ from '../utils/index';
 
 /**
  * Patch left to right
@@ -306,9 +306,6 @@ function diffChildren(left, right, actions)
     let lKeys = Object.keys(lGroup);
     let rKeys = Object.keys(rGroup);
 
-    console.log(lKeys);
-    console.log(rKeys);
-
     if (_.is_equal(lKeys, rKeys))
     {        
         _.foreach(right.children, function(i, rChild)
@@ -335,7 +332,7 @@ function diffChildren(left, right, actions)
         // New node either by key or > index
         if (_.is_undefined(lEntry))
         {
-            let _insert = action('insertAtIndex', [left, rChild, rIndex]);
+            let _insert = rIndex >= lKeys.length ? action('appendChild', [left, rChild]) : action('insertAtIndex', [left, rChild, rIndex]);
 
             if (!inserted)
             {

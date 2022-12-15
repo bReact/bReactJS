@@ -2,7 +2,7 @@
 /******/ 	"use strict";
 var __webpack_exports__ = {};
 
-;// CONCATENATED MODULE: ./src/js/dom/dom/factory.js
+;// CONCATENATED MODULE: ./src/dom/factory.js
 const SVG_ELEMENTS = 'animate circle clipPath defs ellipse g line linearGradient mask path pattern polygon polyline radialGradient rect stop svg text tspan use'.split(' ');
 
 const SVG_MAP = SVG_ELEMENTS.reduce(function (acc, name)
@@ -27,7 +27,7 @@ function createNativeElement(tag)
 {
     return isSvg(tag) ? document.createElementNS('http://www.w3.org/2000/svg', tag) : document.createElement(tag);
 }
-;// CONCATENATED MODULE: ./src/js/dom/utils/index.js
+;// CONCATENATED MODULE: ./src/utils/index.js
 /**
  * Returns var if set
  *
@@ -1087,7 +1087,7 @@ const utils_ = {
 };
 
 /* harmony default export */ const utils = (utils_);
-;// CONCATENATED MODULE: ./src/js/dom/vdom/element.js
+;// CONCATENATED MODULE: ./src/vdom/element.js
 
 
 /**
@@ -1240,13 +1240,6 @@ function squashFragment(fragment, ret, fCount)
     {
         vnode.key = `${basekey}|${i}`;
     });
-
-    let foo = utils.map(_children, function(i, child)
-    {
-        return child.key;
-    });
-
-    console.log(foo);
     
     utils.array_merge(ret, _children);
 }
@@ -1346,13 +1339,6 @@ function patchVnode(left, right)
     {
         left[key] = right[key];
     }
-
-    patchKeys(left);
-}
-
-function patchKeys(vnode)
-{
-
 }
 
 /**
@@ -1391,11 +1377,6 @@ let isEmpty = (node) =>
 
 let noChildren = (node) =>
 {
-    if (!node.children || node.children.length === 0)
-    {
-        return true;
-    }
-
     return node.children.length === 1 && isEmpty(node.children[0]);
 }
 
@@ -1468,14 +1449,88 @@ let nodeElem = (node, elem) =>
     return node.__internals._domEl;
 }
 
+/**
+ * Returns the actual parent DOMElement of a parent node.
+ * 
+ */
+
+let nodeElemParent = (parent) =>
+{
+    if (isFragment(parent) || isThunk(parent))
+    {
+        let child = nodeElem(parent);
+
+        return utils.is_array(child) ? child[0].parentNode : child.parentNode;
+    }
+
+    return nodeElem(parent);
+}
+
+/**
+ * Returns the parent DOMElement of a given vnNode
+ * 
+ */
+
 let parentElem = (node) =>
 {
+    // Native node
     if (isNative(node) || isText(node) || isEmpty(node))
     {
         return nodeElem(node).parentNode;
     }
     
-    return findThunkParentDomEl(node);
+    // Thunks / fragments with a direct child
+    let child = vnode.children[0];
+
+    if (isNative(child) || isText(child) || isEmpty(child))
+    {
+        return nodeElem(child).parentNode;
+    }
+
+    // Recursively traverse down tree until either a DOM node is found
+    // or a fragment is found and return it's parent
+
+    while (isThunk(child) || isFragment(child))
+    {
+        vnode = child;
+        child = child.children[0];
+    }
+
+    return isFragment(vnode) ? nodeElem(vnode.children[0]).parentNode : nodeElem(vnode).parentNode;
+}
+
+/**
+ * Returns the parent DOMElement of a given vnNode
+ * 
+ */
+
+let childDomIndex = (parent, index) =>
+{
+    if (parent.children.length <= 1)
+    {
+        return 0;
+    }
+
+    let buffer = 0;
+
+    utils.foreach(parent.children, function(i, child)
+    {
+        if (vnode === child)
+        {
+            return false;
+        }
+        else if (isThunk(child))
+        {
+            let els = nodeElem(child);
+
+            if (utils.is_array(els))
+            {
+                buffer += els.length;
+            }
+        }
+    });
+
+    return buffer + index;
 }
 
 /**
@@ -1513,12 +1568,12 @@ let nodeComponent = (node, component) =>
 
 function findThunkDomEl(vnode)
 {
-    let child = vnode.children[0];
-
-    if (isNative(child) || isText(child) || isEmpty(child))
+    if (isNative(vnode) || isText(vnode) || isEmpty(vnode))
     {
-        return nodeElem(child);
+        return nodeElem(vnode);
     }
+
+    let child = vnode.children[0];
 
     while (isThunk(child) || isFragment(child))
     {
@@ -1627,7 +1682,7 @@ let nodeWillUnmount = (vnode) =>
 
 
 /* harmony default export */ const vdom_element = ((/* unused pure expression or super */ null && (createElement)));
-;// CONCATENATED MODULE: ./src/js/dom/jsx/Parser.js
+;// CONCATENATED MODULE: ./src/jsx/Parser.js
 function oneObject(str) {
     var obj = {}
     str.split(",").forEach(_ => obj[_] = true)
@@ -2071,15 +2126,16 @@ function makeJSX(JSXNode)
 }
 
 /* harmony default export */ const jsx_Parser = (Parser);
-;// CONCATENATED MODULE: ./src/js/dom/jsx/evaluate.js
+;// CONCATENATED MODULE: ./src/jsx/evaluate.js
 
 
 
 const R_COMPONENT = /^(this|[A-Z])/;
 const CACHE_FNS   = {};
 const CACHE_STR   = {};
+const __scope     = {};
 
-window.__scope = {};
+window.__scope    = __scope;
 
 __scope.createElement = createElement;
 
@@ -2259,14 +2315,14 @@ innerClass.prototype =
     }
 };
 
-;// CONCATENATED MODULE: ./src/js/dom/jsx/index.js
+;// CONCATENATED MODULE: ./src/jsx/index.js
 
 
 function jsx_parseJSX(jsx, obj, config)
 {
 	return evaluate(jsx, obj, config);
 }
-;// CONCATENATED MODULE: ./src/js/dom/vdom/actions.js
+;// CONCATENATED MODULE: ./src/vdom/actions.js
 
 
 const ACTION_MAP =
@@ -2290,7 +2346,7 @@ function action(name, args)
 		args
 	};
 }
-;// CONCATENATED MODULE: ./src/js/dom/vdom/patch.js
+;// CONCATENATED MODULE: ./src/vdom/patch.js
 
 
 
@@ -2599,9 +2655,6 @@ function diffChildren(left, right, actions)
     let lKeys = Object.keys(lGroup);
     let rKeys = Object.keys(rGroup);
 
-    console.log(lKeys);
-    console.log(rKeys);
-
     if (utils.is_equal(lKeys, rKeys))
     {        
         utils.foreach(right.children, function(i, rChild)
@@ -2628,7 +2681,7 @@ function diffChildren(left, right, actions)
         // New node either by key or > index
         if (utils.is_undefined(lEntry))
         {
-            let _insert = action('insertAtIndex', [left, rChild, rIndex]);
+            let _insert = rIndex >= lKeys.length ? action('appendChild', [left, rChild]) : action('insertAtIndex', [left, rChild, rIndex]);
 
             if (!inserted)
             {
@@ -2760,7 +2813,7 @@ function diffAttributes(left, right, actions)
     nodeAttributes(left, nAttrs);
 }
 
-;// CONCATENATED MODULE: ./src/js/dom/vdom/thunk.js
+;// CONCATENATED MODULE: ./src/vdom/thunk.js
 
 
 
@@ -2857,11 +2910,11 @@ function thunk_renderContext(component)
     return ret;
 }
 
-;// CONCATENATED MODULE: ./src/js/dom/vdom/index.js
+;// CONCATENATED MODULE: ./src/vdom/index.js
 
 
 
-;// CONCATENATED MODULE: ./src/js/dom/dom/events.js
+;// CONCATENATED MODULE: ./src/dom/events.js
 
 
 const _events = {};
@@ -3132,7 +3185,7 @@ function _removeListener(el, eventName, handler, useCapture)
 }
 
 /* harmony default export */ const events = ({ addEventListener, removeEventListener, clearEventListeners, collectGarbage });
-;// CONCATENATED MODULE: ./src/js/dom/dom/attributes.js
+;// CONCATENATED MODULE: ./src/dom/attributes.js
 
 
 
@@ -3397,7 +3450,7 @@ function _ucfirst(string)
     return (string + '').charAt(0).toUpperCase() + string.slice(1);
 }
 
-;// CONCATENATED MODULE: ./src/js/dom/dom/create.js
+;// CONCATENATED MODULE: ./src/dom/create.js
 
 
 
@@ -3551,13 +3604,19 @@ function createFragment(vnode, parentDOMElement)
     return ret;
 }
 
-;// CONCATENATED MODULE: ./src/js/dom/dom/commit.js
+;// CONCATENATED MODULE: ./src/dom/commit.js
 
 
 
 
 
 
+/**
+ * Commit tree patching to DOM / vDom
+ * 
+ * @param {array}  actions  Array of actions.
+ * 
+ */
 function commit(actions)
 {
     console.log(actions);
@@ -3570,6 +3629,12 @@ function commit(actions)
     });
 }
 
+/**
+ * Replace Vnode / DomNode text
+ * 
+ * @param {object}  vndone  Vnode to replace text
+ * @param {string}  text    Text to set
+ */
 function replaceText(vnode, text)
 {
     vnode.nodeValue = text;
@@ -3577,16 +3642,20 @@ function replaceText(vnode, text)
     nodeElem(vnode).nodeValue = text;
 }
 
+/**
+ * Replace Vnode / DomNode
+ * 
+ * @param {object}  vndone  Left Vnode to replace text
+ * @param {object}  vndone  Right Vnode to replace with
+ */
 function commit_replaceNode(left, right)
 {
     nodeWillUnmount(left);
 
     removeEvents(left);
 
-    let rDOMElement = createDomElement(right);
-
-    let lDOMElement = nodeElem(left);
-
+    let rDOMElement      = createDomElement(right);
+    let lDOMElement      = nodeElem(left);
     let parentDOMElement = parentElem(left);
 
     // We don't care if left or right is a thunk or fragment here
@@ -3661,49 +3730,38 @@ function commit_replaceNode(left, right)
     patchVnodes(left, right);
 }
 
+/**
+ * Append Vnode / DomNode
+ * 
+ * @param {object}  parentVnode  Parent Vnode to append to
+ * @param {object}  vndone       Vnode to append
+ */
 function appendChild(parentVnode, vnode)
 {
-    let parentDOMElement = nodeElem(parentVnode);
-
+    let parentDOMElement = nodeElemParent(parentVnode);
     let DOMElement = createDomElement(vnode);
 
-    // What if we're appending into a fragment ?
-    if (utils.is_array(parentDOMElement))
+    if (utils.is_array(DOMElement))
     {
-        parentDOMElement = parentDOMElement[0].parentNode;
-
-        if (utils.is_array(DOMElement))
-        {
-            utils.foreach(DOMElement, function(i, child)
-            {
-                parentDOMElement.appendChild(child);
-            });
-        }
-        else
-        {
-            parentDOMElement.appendChild(DOMElement);
-        }
+        utils.foreach(DOMElement, function(i, child)
+        {                
+            parentDOMElement.appendChild(child);
+        });
     }
     else
     {
-        if (utils.is_array(DOMElement))
-        {
-            utils.foreach(DOMElement, function(i, child)
-            {                
-                parentDOMElement.appendChild(child);
-            });
-        }
-        else
-        {
-            parentDOMElement.appendChild(DOMElement);
-        }
+        parentDOMElement.appendChild(DOMElement);
     }
 
     parentVnode.children.push(vnode);
-
-    patchKeys(parentVnode);
 }
 
+/**
+ * Remove child Vnode / DomNode
+ * 
+ * @param {object}  parentVnode  Parent Vnode to append to
+ * @param {object}  vndone       Vnode to append
+ */
 function removeChild(parentVnode, vnode)
 {
     nodeWillUnmount(vnode);
@@ -3760,90 +3818,83 @@ function removeEvents(vnode)
     }
 }
 
+// Problem with moving / inserting to index
+// is actual DOM index doesn't line up with the vnode index
+// if a vnode is nesting a fragment
+
 function insertAtIndex(parentVnode, vnode, index)
 {
-    let DOMElement = createDomElement(vnode);
-
-    let parentDOMElement = getUnknownParent(parentVnode);
+    let vIndex           = index;
+    let dIndex           = childDomIndex(parentVnode, index);
+    let DOMElement       = createDomElement(vnode);
+    let parentDOMElement = nodeElemParent(parentVnode);
 
     if (utils.is_array(DOMElement))
-    {
+    {        
         utils.foreach(DOMElement, function(i, child)
         {
-            if (index >= parentDOMElement.children.length)
+            if (dIndex >= parentDOMElement.children.length)
             {
                 parentDOMElement.appendChild(child);
             }
             else
-            {
-                parentDOMElement.insertBefore(child, parentDOMElement.children[index]);
+            {                
+                parentDOMElement.insertBefore(child, parentDOMElement.children[dIndex]);
             }
 
-            index++;
+            dIndex++;
         });
     }
     else
     {
-        if (index >= parentDOMElement.children.length)
+        if (dIndex >= parentDOMElement.children.length)
         {
             parentDOMElement.appendChild(DOMElement);
         }
         else
         {
-            parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[index]);
+            parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[dIndex]);
         }
     }
 
-    parentVnode.children.splice(index, 0, vnode);
-
-    patchKeys(parentVnode);
-}
-
-function getUnknownParent(parent)
-{
-    let nodeEl = nodeElem(parent);
-
-    if (utils.is_array(nodeEl))
-    {
-        return nodeEl[0].parentNode;
-    }
-
-    return nodeEl;
+    parentVnode.children.splice(vIndex, 0, vnode);
 }
 
 function moveToIndex(parentVnode, vnode, index)
 {
+    let vIndex           = index;
+    let dIndex           = childDomIndex(parentVnode, index);
     let DOMElement       = nodeElem(vnode);
     let isFragment       = utils.is_array(DOMElement);
-    let parentDOMElement = isFragment ? DOMElement[0].parentNode : DOMElement.parentNode;
-    let currIndex        = Array.prototype.slice.call(parentDOMElement.children).indexOf(DOMElement);
+    let parentDOMElement = nodeElemParent(parentVnode);
+    let currIndex        = isFragment ? Array.prototype.slice.call(parentDOMElement.children).indexOf(DOMElement[0]) : Array.prototype.slice.call(parentDOMElement.children).indexOf(DOMElement);
     
     if (isFragment)
     {
-        moveFragmentDomEls(parentDOMElement, DOMElement, index, currIndex);
+        moveFragmentDomEls(parentDOMElement, DOMElement, dIndex, currIndex);
 
         return;
     }
 
     // Nothing to do
-    if (currIndex === index || (index === 0 && parentDOMElement.children.length === 0))
+    if (currIndex === dIndex || (dIndex === 0 && parentDOMElement.children.length === 0))
     {
         
     }
     // Move to start
-    else if (index === 0)
+    else if (dIndex === 0)
     {
         parentDOMElement.insertBefore(DOMElement, parentDOMElement.firstChild);
     }
     // Move to end
-    else if (index >= parentDOMElement.children.length)
+    else if (dIndex >= parentDOMElement.children.length)
     { 
         parentDOMElement.removeChild(DOMElement);
         parentDOMElement.appendChild(DOMElement);
     }
     else
     {
-        parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[index]);
+        parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[dIndex]);
     }
 
     // Move vnode
@@ -3851,13 +3902,13 @@ function moveToIndex(parentVnode, vnode, index)
     let vCurrIndex = vChildren.indexOf(vnode);
 
     // Do nothing
-    if (vCurrIndex === index || (index === 0 && vChildren.length === 0))
+    if (vCurrIndex === vIndex || (vIndex === 0 && vChildren.length === 0))
     {
         // Nothing to do
     }
     else
     {
-        vChildren.splice(index, 0, vChildren.splice(vCurrIndex, 1)[0]);
+        vChildren.splice(vIndex, 0, vChildren.splice(vCurrIndex, 1)[0]);
     }
 }
 
@@ -3907,10 +3958,10 @@ function removeAttribute(vnode, name, previousValue)
     removeDomAttribute(nodeElem(vnode), name, previousValue)
 }
 
-;// CONCATENATED MODULE: ./src/js/dom/dom/index.js
+;// CONCATENATED MODULE: ./src/dom/index.js
 
 
-;// CONCATENATED MODULE: ./src/js/dom/render/index.js
+;// CONCATENATED MODULE: ./src/render/index.js
 
 
 
@@ -3951,7 +4002,7 @@ function mount(DOMElement, parent)
         parent.appendChild(DOMElement);
     }
 }
-;// CONCATENATED MODULE: ./src/js/dom/component/index.js
+;// CONCATENATED MODULE: ./src/component/index.js
 
 
 
@@ -4097,11 +4148,11 @@ class Fragment extends Component
 }
 
 /* harmony default export */ const component = ((/* unused pure expression or super */ null && (Component)));
-;// CONCATENATED MODULE: ./src/js/dom/index.js
+;// CONCATENATED MODULE: ./src/index.js
 
 
 
-;// CONCATENATED MODULE: ./src/js/index.js
+;// CONCATENATED MODULE: ./index.js
 
 
 (function()
@@ -4185,10 +4236,22 @@ class Fragment extends Component
 
         render()
         {
+            if (this.props.testprop > 1)
+            {
+                return `
+                    <Fragment>
+                        <div>FragmentNest2 (1)</div>
+                        <div>FragmentNest2 (2)</div>
+                        <div>FragmentNest2 (3)</div>
+                    </Fragment>
+                `;
+
+            }
+
             return `
                 <Fragment>
-                    <div>4. nested fragment2!</div>
-                    <div>3. nested fragment2!</div>
+                    <div>FragmentNest2 (1)</div>
+                    <div>FragmentNest2 (2)</div>
                 </Fragment>
             `;
         }
@@ -4203,7 +4266,7 @@ class Fragment extends Component
         {
             return `
                 <Fragment>
-                    <FragmentNest2 />
+                    <FragmentNest2 testprop={this.props.testprop} />
                 </Fragment>
             `;
         }
@@ -4301,42 +4364,47 @@ class Fragment extends Component
 
         render()
         {
-            /*return `
-                <section>
-                    <ThunkNest1 />
-                </section>
-            `;*/
-
-           /* if (this.state.counter === 2)
+            /* if (this.state.counter === 2)
             {
                return `
-                     <div>
-                        1. One
-                        <FragmentNest1 />
-                        <Fragment>
-                            <section>Test 1.</section>
-                            <section>Test 2.</section>
-                        </Fragment>
-                        2. Two
-                        <FragmentNest1 />
-                    </div>
+                 <div>
+                    <section>1</section>
+                    <section>2</section>
+                </div>
                 `;
-            }*/
+            }
 
             return `
                 <div>
-                    <FragmentNest1 key="test" />
-                    <Fragment>
-                        <ThunkNest1 />
-                        <i>test</i>
-                    </Fragment>
+                    <section>1</section>
+                </div>
+            `;*/
+
+           
+            return `
+                <div>
+                    <FragmentNest1 testprop={this.state.counter} />
+                </div>
+            `;
+
+            if (this.state.counter === 2)
+            {
+               return `
+                     <div>
+                        <div>1</div>
+                        <FragmentNest1 />
+                        <div key="native">keyed native</div>
+                        <div>2</div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div>
+                    <div>1</div>
+                    <div>2</div>
                     <FragmentNest1 />
-                    <Fragment key="mykey">
-                        <div>Test 1.</div>
-                        <div>Test 2.</div>
-                    </Fragment>
-                    Foo
-                    <div key="testnative"><div>
+                    <div key="native">keyed native</div>
                 </div>
             `;
 

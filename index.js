@@ -1,4 +1,4 @@
-import { render, Component, createElement, Fragment } from './dom';
+import { render, Component, createElement, Fragment } from './src/index';
 
 (function()
 {
@@ -81,10 +81,22 @@ import { render, Component, createElement, Fragment } from './dom';
 
         render()
         {
+            if (this.props.testprop > 1)
+            {
+                return `
+                    <Fragment>
+                        <div>FragmentNest2 (1)</div>
+                        <div>FragmentNest2 (2)</div>
+                        <div>FragmentNest2 (3)</div>
+                    </Fragment>
+                `;
+
+            }
+
             return `
                 <Fragment>
-                    <div>4. nested fragment2!</div>
-                    <div>3. nested fragment2!</div>
+                    <div>FragmentNest2 (1)</div>
+                    <div>FragmentNest2 (2)</div>
                 </Fragment>
             `;
         }
@@ -99,7 +111,7 @@ import { render, Component, createElement, Fragment } from './dom';
         {
             return `
                 <Fragment>
-                    <FragmentNest2 />
+                    <FragmentNest2 testprop={this.props.testprop} />
                 </Fragment>
             `;
         }
@@ -197,42 +209,47 @@ import { render, Component, createElement, Fragment } from './dom';
 
         render()
         {
-            /*return `
-                <section>
-                    <ThunkNest1 />
-                </section>
-            `;*/
-
-           /* if (this.state.counter === 2)
+            /* if (this.state.counter === 2)
             {
                return `
-                     <div>
-                        1. One
-                        <FragmentNest1 />
-                        <Fragment>
-                            <section>Test 1.</section>
-                            <section>Test 2.</section>
-                        </Fragment>
-                        2. Two
-                        <FragmentNest1 />
-                    </div>
+                 <div>
+                    <section>1</section>
+                    <section>2</section>
+                </div>
                 `;
-            }*/
+            }
 
             return `
                 <div>
-                    <FragmentNest1 key="test" />
-                    <Fragment>
-                        <ThunkNest1 />
-                        <i>test</i>
-                    </Fragment>
+                    <section>1</section>
+                </div>
+            `;*/
+
+           
+            return `
+                <div>
+                    <FragmentNest1 testprop={this.state.counter} />
+                </div>
+            `;
+
+            if (this.state.counter === 2)
+            {
+               return `
+                     <div>
+                        <div>1</div>
+                        <FragmentNest1 />
+                        <div key="native">keyed native</div>
+                        <div>2</div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div>
+                    <div>1</div>
+                    <div>2</div>
                     <FragmentNest1 />
-                    <Fragment key="mykey">
-                        <div>Test 1.</div>
-                        <div>Test 2.</div>
-                    </Fragment>
-                    Foo
-                    <div key="testnative"><div>
+                    <div key="native">keyed native</div>
                 </div>
             `;
 

@@ -1,11 +1,12 @@
 import Parser  from './Parser';
-import { createElement } from '../vdom';
+import { createElement } from '../vdom/index';
 
 const R_COMPONENT = /^(this|[A-Z])/;
 const CACHE_FNS   = {};
 const CACHE_STR   = {};
+const __scope     = {};
 
-window.__scope = {};
+window.__scope    = __scope;
 
 __scope.createElement = createElement;
 

@@ -1,5 +1,5 @@
-import { thunkUpdate } from '../vdom';
-import _ from '../utils';
+import { thunkUpdate } from '../vdom/index';
+import _ from '../utils/index';
 
 /**
  * Base component

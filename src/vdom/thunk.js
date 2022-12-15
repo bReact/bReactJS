@@ -1,8 +1,8 @@
 import { createElement, nodeComponent, isNative, isThunk, isFragment } from './element';
-import parseJSX from '../jsx';
-import { commit } from '../dom';
+import parseJSX from '../jsx/index';
+import { commit } from '../dom/index';
 import { patch } from './patch';
-import _ from '../utils';
+import _ from '../utils/index';
 
 export function thunkInstantiate(vnode)
 {

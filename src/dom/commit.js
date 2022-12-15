@@ -1,9 +1,15 @@
-import _ from '../utils';
-import * as vDOM from '../vdom';
+import _ from '../utils/index';
+import * as vDOM from '../vdom/index';
 import { createDomElement } from './create';
 import { setDomAttribute, removeDomAttribute } from './attributes';
 import * as events from './events';
 
+/**
+ * Commit tree patching to DOM / vDom
+ * 
+ * @param {array}  actions  Array of actions.
+ * 
+ */
 export function commit(actions)
 {
     console.log(actions);
@@ -16,6 +22,12 @@ export function commit(actions)
     });
 }
 
+/**
+ * Replace Vnode / DomNode text
+ * 
+ * @param {object}  vndone  Vnode to replace text
+ * @param {string}  text    Text to set
+ */
 export function replaceText(vnode, text)
 {
     vnode.nodeValue = text;
@@ -23,16 +35,20 @@ export function replaceText(vnode, text)
     vDOM.nodeElem(vnode).nodeValue = text;
 }
 
+/**
+ * Replace Vnode / DomNode
+ * 
+ * @param {object}  vndone  Left Vnode to replace text
+ * @param {object}  vndone  Right Vnode to replace with
+ */
 export function replaceNode(left, right)
 {
     vDOM.nodeWillUnmount(left);
 
     removeEvents(left);
 
-    let rDOMElement = createDomElement(right);
-
-    let lDOMElement = vDOM.nodeElem(left);
-
+    let rDOMElement      = createDomElement(right);
+    let lDOMElement      = vDOM.nodeElem(left);
     let parentDOMElement = vDOM.parentElem(left);
 
     // We don't care if left or right is a thunk or fragment here
@@ -107,47 +123,38 @@ export function replaceNode(left, right)
     vDOM.patchVnodes(left, right);
 }
 
+/**
+ * Append Vnode / DomNode
+ * 
+ * @param {object}  parentVnode  Parent Vnode to append to
+ * @param {object}  vndone       Vnode to append
+ */
 export function appendChild(parentVnode, vnode)
 {
-    let parentDOMElement = vDOM.nodeElem(parentVnode);
-
+    let parentDOMElement = vDOM.nodeElemParent(parentVnode);
     let DOMElement = createDomElement(vnode);
 
-    // What if we're appending into a fragment ?
-    if (_.is_array(parentDOMElement))
+    if (_.is_array(DOMElement))
     {
-        parentDOMElement = parentDOMElement[0].parentNode;
-
-        if (_.is_array(DOMElement))
-        {
-            _.foreach(DOMElement, function(i, child)
-            {
-                parentDOMElement.appendChild(child);
-            });
-        }
-        else
-        {
-            parentDOMElement.appendChild(DOMElement);
-        }
+        _.foreach(DOMElement, function(i, child)
+        {                
+            parentDOMElement.appendChild(child);
+        });
     }
     else
     {
-        if (_.is_array(DOMElement))
-        {
-            _.foreach(DOMElement, function(i, child)
-            {                
-                parentDOMElement.appendChild(child);
-            });
-        }
-        else
-        {
-            parentDOMElement.appendChild(DOMElement);
-        }
+        parentDOMElement.appendChild(DOMElement);
     }
 
     parentVnode.children.push(vnode);
 }
 
+/**
+ * Remove child Vnode / DomNode
+ * 
+ * @param {object}  parentVnode  Parent Vnode to append to
+ * @param {object}  vndone       Vnode to append
+ */
 export function removeChild(parentVnode, vnode)
 {
     vDOM.nodeWillUnmount(vnode);
@@ -204,88 +211,83 @@ function removeEvents(vnode)
     }
 }
 
+// Problem with moving / inserting to index
+// is actual DOM index doesn't line up with the vnode index
+// if a vnode is nesting a fragment
+
 export function insertAtIndex(parentVnode, vnode, index)
 {
-    let DOMElement = createDomElement(vnode);
-
-    let parentDOMElement = getUnknownParent(parentVnode);
+    let vIndex           = index;
+    let dIndex           = vDOM.childDomIndex(parentVnode, index);
+    let DOMElement       = createDomElement(vnode);
+    let parentDOMElement = vDOM.nodeElemParent(parentVnode);
 
     if (_.is_array(DOMElement))
-    {
+    {        
         _.foreach(DOMElement, function(i, child)
         {
-            if (index >= parentDOMElement.children.length)
+            if (dIndex >= parentDOMElement.children.length)
             {
                 parentDOMElement.appendChild(child);
             }
             else
-            {
-                parentDOMElement.insertBefore(child, parentDOMElement.children[index]);
+            {                
+                parentDOMElement.insertBefore(child, parentDOMElement.children[dIndex]);
             }
 
-            index++;
+            dIndex++;
         });
     }
     else
     {
-        if (index >= parentDOMElement.children.length)
+        if (dIndex >= parentDOMElement.children.length)
         {
             parentDOMElement.appendChild(DOMElement);
         }
         else
         {
-            parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[index]);
+            parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[dIndex]);
         }
     }
 
-    parentVnode.children.splice(index, 0, vnode);
-}
-
-export function getUnknownParent(parent)
-{
-    let nodeEl = vDOM.nodeElem(parent);
-
-    if (_.is_array(nodeEl))
-    {
-        return nodeEl[0].parentNode;
-    }
-
-    return nodeEl;
+    parentVnode.children.splice(vIndex, 0, vnode);
 }
 
 export function moveToIndex(parentVnode, vnode, index)
 {
+    let vIndex           = index;
+    let dIndex           = vDOM.childDomIndex(parentVnode, index);
     let DOMElement       = vDOM.nodeElem(vnode);
     let isFragment       = _.is_array(DOMElement);
-    let parentDOMElement = isFragment ? DOMElement[0].parentNode : DOMElement.parentNode;
-    let currIndex        = Array.prototype.slice.call(parentDOMElement.children).indexOf(DOMElement);
+    let parentDOMElement = vDOM.nodeElemParent(parentVnode);
+    let currIndex        = isFragment ? Array.prototype.slice.call(parentDOMElement.children).indexOf(DOMElement[0]) : Array.prototype.slice.call(parentDOMElement.children).indexOf(DOMElement);
     
     if (isFragment)
     {
-        moveFragmentDomEls(parentDOMElement, DOMElement, index, currIndex);
+        moveFragmentDomEls(parentDOMElement, DOMElement, dIndex, currIndex);
 
         return;
     }
 
     // Nothing to do
-    if (currIndex === index || (index === 0 && parentDOMElement.children.length === 0))
+    if (currIndex === dIndex || (dIndex === 0 && parentDOMElement.children.length === 0))
     {
         
     }
     // Move to start
-    else if (index === 0)
+    else if (dIndex === 0)
     {
         parentDOMElement.insertBefore(DOMElement, parentDOMElement.firstChild);
     }
     // Move to end
-    else if (index >= parentDOMElement.children.length)
+    else if (dIndex >= parentDOMElement.children.length)
     { 
         parentDOMElement.removeChild(DOMElement);
         parentDOMElement.appendChild(DOMElement);
     }
     else
     {
-        parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[index]);
+        parentDOMElement.insertBefore(DOMElement, parentDOMElement.children[dIndex]);
     }
 
     // Move vnode
@@ -293,13 +295,13 @@ export function moveToIndex(parentVnode, vnode, index)
     let vCurrIndex = vChildren.indexOf(vnode);
 
     // Do nothing
-    if (vCurrIndex === index || (index === 0 && vChildren.length === 0))
+    if (vCurrIndex === vIndex || (vIndex === 0 && vChildren.length === 0))
     {
         // Nothing to do
     }
     else
     {
-        vChildren.splice(index, 0, vChildren.splice(vCurrIndex, 1)[0]);
+        vChildren.splice(vIndex, 0, vChildren.splice(vCurrIndex, 1)[0]);
     }
 }
 

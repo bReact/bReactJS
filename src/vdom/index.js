@@ -19,6 +19,8 @@ export {
 	thunkName,
 	nodeWillUnmount,
 	nodeElem,
+	nodeElemParent,
+	childDomIndex,
 	nodeComponent,
 	pointVnodeThunk,
 	nodeAttributes,

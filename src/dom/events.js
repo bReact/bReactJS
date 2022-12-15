@@ -1,4 +1,4 @@
-import { in_dom } from '../utils';
+import { in_dom } from '../utils/index';
 
 const _events = {};
 

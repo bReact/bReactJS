@@ -1,6 +1,6 @@
-import { createDomElement } from '../dom';
-import { createElement, nodeElem } from '../vdom';
-import _ from '../utils';
+import { createDomElement } from '../dom/index';
+import { createElement, nodeElem } from '../vdom/index';
+import _ from '../utils/index';
 
 export function render(component, parent)
 {        

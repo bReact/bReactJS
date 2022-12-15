@@ -1,4 +1,4 @@
-import _ from '../utils';
+import _ from '../utils/index';
 import * as events from './events';
 
 /**
