@@ -329,8 +329,6 @@ import { render, Component, createElement, Fragment, jsx } from './src/index';
 
     const FunctionalCompVar = function(props)
     {
-        const [count, setCount] = useState(0);
-
         let vars = 
         {
             greeting : 'Hello World!'
@@ -344,7 +342,7 @@ import { render, Component, createElement, Fragment, jsx } from './src/index';
 
     }
 
-    function Car()
+    /*function Car()
     {
         const [brand, setBrand] = useState("Ford");
         const [model, setModel] = useState("Mustang");
@@ -377,7 +375,7 @@ import { render, Component, createElement, Fragment, jsx } from './src/index';
                 <button onClick={() => genCar()}>Generate Car</button>
             </div>`,
         vars);
-    }
+    }*/
 
 
     class App extends Component
@@ -396,7 +394,6 @@ import { render, Component, createElement, Fragment, jsx } from './src/index';
                 <div>
                     <ArrowFunc />
                     <FuncFunc />
-                    <Car />
                 </div>
             `;
         }

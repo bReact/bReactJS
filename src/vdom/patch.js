@@ -1,7 +1,6 @@
 import { action } from './actions';
 import * as vElem from './utils';
 import * as thunk from './thunk';
-import * as func  from './func';
 import _ from '../utils/index';
 
 /**
@@ -30,10 +29,6 @@ export function patch(prevNode, nextNode, actions)
     else if (vElem.isThunk(nextNode))
     {
         patchThunk(prevNode, nextNode, actions);
-    }
-     else if (vElem.isFunc(nextNode))
-    {
-        patchFunc(prevNode, nextNode, actions);
     }
     else if (vElem.isFragment(nextNode))
     {
@@ -71,10 +66,6 @@ function replaceNode(left, right, actions)
             vElem.pointVnodeThunk(vnode, component);
         }
     }
-    else if (vElem.isFunc(right))
-    {
-        func.funcRender(right);
-    }
 
     actions.push(action('replaceNode', [left, right]));
 }
@@ -91,29 +82,6 @@ function patchNative(left, right, actions)
 
         patchChildren(left, right, actions);
     }
-}
-
-function patchFunc(left, right, actions)
-{        
-    // Same func 
-    if (vElem.isSameFunc(left, right))
-    {        
-        diffFunc(left, right, actions);
-    }
-    // Different functions
-    else
-    {
-        func.funcRender(right);
-
-        actions.push(action('replaceNode', [left, right]));
-    }
-}
-
-function diffFunc(left, right, actions)
-{    
-    func.funcRender(right);
-
-    patchChildren(left, right, actions);
 }
 
 function patchThunk(left, right, actions)

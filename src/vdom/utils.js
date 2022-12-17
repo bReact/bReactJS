@@ -36,11 +36,6 @@ export let isThunk = (node) =>
     return node.type === 'thunk';
 }
 
-export let isFunc = (node) =>
-{
-    return node.type === 'func';
-}
-
 export let isNative = (node) =>
 {
     return node.type === 'native';
@@ -71,11 +66,6 @@ export let isSameThunk = (left, right) =>
     return isThunk(left) && isThunk(right) && left.fn === right.fn;
 }
 
-export let isSameFunc = (left, right) =>
-{
-    return isFunc(left) && isFunc(right) && left.fn === right.fn;
-}
-
 export let isThunkInstantiated = (vnode) =>
 {
     return nodeComponent(vnode) !== null;
@@ -92,9 +82,9 @@ export let isSameFragment = (left, right) =>
 
 export let isNestingFragment = (node) =>
 {
-    if ((isThunk(node) && isThunkInstantiated(node)) || isFunc(node))
+    if (isThunk(node) && isThunkInstantiated(node))
     {
-        while (node.children && (isThunk(node) || isFunc(node)))
+        while (node.children && isThunk(node))
         {
             node = node.children[0];
         }
@@ -127,7 +117,7 @@ export let nodeElem = (node, elem) =>
         return elem;
     }
 
-    if (isThunk(node) || isFragment(node) || isFunc(node))
+    if (isThunk(node) || isFragment(node))
     {
         return findThunkDomEl(node);
     }
@@ -142,7 +132,7 @@ export let nodeElem = (node, elem) =>
 
 export let nodeElemParent = (parent) =>
 {
-    if (isFragment(parent) || isThunk(parent) || isFunc(parent))
+    if (isFragment(parent) || isThunk(parent))
     {
         let child = nodeElem(parent);
 
@@ -176,7 +166,7 @@ export let parentElem = (node) =>
     // Recursively traverse down tree until either a DOM node is found
     // or a fragment is found and return it's parent
 
-    while (isThunk(child) || isFragment(child) || isFunc(child))
+    while (isThunk(child) || isFragment(child))
     {
         vnode = child;
         child = child.children[0];
@@ -205,7 +195,7 @@ export let childDomIndex = (parent, index) =>
         {
             return false;
         }
-        else if (isThunk(child) || isFunc(child))
+        else if (isThunk(child))
         {
             let els = nodeElem(child);
 
@@ -261,7 +251,7 @@ function findThunkDomEl(vnode)
 
     let child = vnode.children[0];
 
-    while (isThunk(child) || isFragment(child) || isFunc(child))
+    while (isThunk(child) || isFragment(child))
     {
         vnode = child;
         child = child.children[0];
@@ -287,7 +277,7 @@ function findThunkParentDomEl(vnode)
         return nodeElem(child).parentNode;
     }
 
-    while (isThunk(child) || isFragment(child) || isFunc(child))
+    while (isThunk(child) || isFragment(child))
     {
         vnode = child;
         child = child.children[0];
@@ -339,7 +329,7 @@ export function patchVnodes(left, right)
 
 export let nodeWillUnmount = (vnode) =>
 {
-    if (isThunk(vnode) || isFragment(vnode) || isFunc(vnode))
+    if (isThunk(vnode) || isFragment(vnode))
     {
         let component = nodeComponent(vnode);
 

@@ -1191,11 +1191,6 @@ let isThunk = (node) =>
     return node.type === 'thunk';
 }
 
-let isFunc = (node) =>
-{
-    return node.type === 'func';
-}
-
 let isNative = (node) =>
 {
     return node.type === 'native';
@@ -1226,11 +1221,6 @@ let isSameThunk = (left, right) =>
     return isThunk(left) && isThunk(right) && left.fn === right.fn;
 }
 
-let isSameFunc = (left, right) =>
-{
-    return isFunc(left) && isFunc(right) && left.fn === right.fn;
-}
-
 let isThunkInstantiated = (vnode) =>
 {
     return nodeComponent(vnode) !== null;
@@ -1247,9 +1237,9 @@ let isSameFragment = (left, right) =>
 
 let isNestingFragment = (node) =>
 {
-    if ((isThunk(node) && isThunkInstantiated(node)) || isFunc(node))
+    if (isThunk(node) && isThunkInstantiated(node))
     {
-        while (node.children && (isThunk(node) || isFunc(node)))
+        while (node.children && isThunk(node))
         {
             node = node.children[0];
         }
@@ -1282,7 +1272,7 @@ let nodeElem = (node, elem) =>
         return elem;
     }
 
-    if (isThunk(node) || isFragment(node) || isFunc(node))
+    if (isThunk(node) || isFragment(node))
     {
         return findThunkDomEl(node);
     }
@@ -1297,7 +1287,7 @@ let nodeElem = (node, elem) =>
 
 let nodeElemParent = (parent) =>
 {
-    if (isFragment(parent) || isThunk(parent) || isFunc(parent))
+    if (isFragment(parent) || isThunk(parent))
     {
         let child = nodeElem(parent);
 
@@ -1331,7 +1321,7 @@ let parentElem = (node) =>
     // Recursively traverse down tree until either a DOM node is found
     // or a fragment is found and return it's parent
 
-    while (isThunk(child) || isFragment(child) || isFunc(child))
+    while (isThunk(child) || isFragment(child))
     {
         vnode = child;
         child = child.children[0];
@@ -1360,7 +1350,7 @@ let childDomIndex = (parent, index) =>
         {
             return false;
         }
-        else if (isThunk(child) || isFunc(child))
+        else if (isThunk(child))
         {
             let els = nodeElem(child);
 
@@ -1416,7 +1406,7 @@ function findThunkDomEl(vnode)
 
     let child = vnode.children[0];
 
-    while (isThunk(child) || isFragment(child) || isFunc(child))
+    while (isThunk(child) || isFragment(child))
     {
         vnode = child;
         child = child.children[0];
@@ -1442,7 +1432,7 @@ function findThunkParentDomEl(vnode)
         return nodeElem(child).parentNode;
     }
 
-    while (isThunk(child) || isFragment(child) || isFunc(child))
+    while (isThunk(child) || isFragment(child))
     {
         vnode = child;
         child = child.children[0];
@@ -1494,7 +1484,7 @@ function patchVnodes(left, right)
 
 let nodeWillUnmount = (vnode) =>
 {
-    if (isThunk(vnode) || isFragment(vnode) || isFunc(vnode))
+    if (isThunk(vnode) || isFragment(vnode))
     {
         let component = nodeComponent(vnode);
 
@@ -1519,6 +1509,193 @@ let nodeWillUnmount = (vnode) =>
         });
     }
 }
+;// CONCATENATED MODULE: ./src/component/index.js
+
+
+
+/**
+ * Base component
+ * 
+ * static getDerivedStateFromProps()
+ * componentDidMount()
+ * componentWillUnmount()
+ * componentWillReceiveProps(nextProps)
+ * getSnapshotBeforeUpdate(prevProps, prevState)
+ * shouldComponentUpdate(nextProps, nextState)
+ * componentWillUpdate(changedProps, changedState)
+ * componentDidUpdate(prevProps, prevState, snapshot)
+ * componentDidCatch()
+ * @class
+ */
+class Component
+{
+    /**
+     * Context.
+     *
+     * @var {object}
+     */
+    context = {};
+
+    /**
+     * props.
+     *
+     * @var {object}
+     */
+    props = {};
+
+    /**
+     * Reference to DOM node.
+     *
+     * @var {object}
+     */
+    refs = {};
+
+    /**
+     * State obj
+     *
+     * @var {object}
+     */
+    state = {};
+
+    /**
+     * Default props.
+     *
+     * @var {object}
+     */
+    defaultProps = {};
+
+    /**
+     * Internal use
+     *
+     * @var {object}
+     */
+    __internals = 
+    {
+        vnode     : null,
+        prevState : {},
+        prevProps : {},
+    };
+
+    /**
+     * Constructor
+     *
+     */
+    constructor(props)
+    {
+        this.props = !utils.is_object(props) ? {} : props;
+    }
+
+    setState(key, value, callback)
+    {
+        if (!utils.is_object(this.state))
+        {
+            this.state = {};
+        }
+
+        let stateChanges = {};
+
+        // setState({ 'foo.bar' : 'foo' })
+        if (arguments.length === 1)
+        {
+            if (!utils.is_object(key))
+            {
+                throw new Error('StateError: State should be an object with [dot.notation] keys. e.g. [setState({"foo.bar" : "baz"})]');
+            }
+
+            stateChanges = key;
+        }
+        else
+        {
+            stateChanges[key] = value;
+        }
+
+        this.__internals.prevState = utils.cloneDeep(this.state);
+
+        utils.foreach(stateChanges, function(key, value)
+        {
+            utils.array_set(key, value, this.state);
+            
+        }, this);
+
+        if (!utils.is_equal(this.state, this.__internals.prevState))
+        {
+            thunkUpdate(this.__internals.vnode);
+        }
+    }
+
+    getState(key)
+    {
+        return array_get(key, this.state);
+    }
+
+    jsx(jsx)
+    {
+        const context = renderContext(this);
+
+        return parseJSX(jsx, {...context, this: this});
+    }
+
+    forceUpdate()
+    {
+        thunkUpdate(this.__internals.vnode);
+    }
+}
+
+/**
+ * Fragment component
+ * 
+ * @class
+ */
+class Fragment extends Component
+{    
+    constructor(props)
+    {
+        super(props);
+    }
+}
+
+/**
+ * Functional component
+ * 
+ * @class
+ */
+class Factory extends Component
+{
+    /**
+     * Constructor
+     *
+     */
+    constructor(render, props)
+    {
+        super(props);
+
+        this.__internals._fn = render;
+    }
+
+    render()
+    {
+        return this.__internals._fn(this.props);
+    }
+}
+
+/**
+ * Functional component callback
+ * 
+ * @class
+ */
+function componentFactory(fn)
+{   
+    const factory = function(props)
+    {
+        let component = new Factory(fn, props);
+
+        return component;
+    }
+
+    return factory;
+}
+
+/* harmony default export */ const component = ((/* unused pure expression or super */ null && (Component)));
 ;// CONCATENATED MODULE: ./src/vdom/element.js
 
 
@@ -1769,46 +1946,24 @@ function createThunkElement(fn, props, children, key, ref)
 
 function createFunctionalThunk(fn, props, children, key, ref)
 {
+    let func = componentFactory(fn);
+
     return {
-        type: 'func',
-        fn,
+        type: 'thunk',
+        fn : func,
         children : null,
         props,
         key,
         __internals:
         {
             _domEl: null,
+            _component: null,
             _name : utils.callable_name(fn)
         }
     }
 }
 
-
 /* harmony default export */ const vdom_element = ((/* unused pure expression or super */ null && (createElement)));
-;// CONCATENATED MODULE: ./src/vdom/actions.js
-
-
-const ACTION_MAP =
-{
-	replaceNode: commit_replaceNode,
-	appendChild: appendChild,
-	removeChild: removeChild,
-	insertAtIndex: insertAtIndex,
-	moveToIndex: moveToIndex,
-	replaceText: replaceText,
-	setAttribute: setAttribute,
-	removeAttribute: removeAttribute
-};
-
-function action(name, args)
-{ 	
-	let callback = ACTION_MAP[name];
-
-	return {
-		callback,
-		args
-	};
-}
 ;// CONCATENATED MODULE: ./src/jsx/Parser.js
 function oneObject(str) {
     var obj = {}
@@ -2460,106 +2615,31 @@ function jsx(str, vars)
 
 	return evaluate(str, vars);
 }
-;// CONCATENATED MODULE: ./src/vdom/thunk.js
+;// CONCATENATED MODULE: ./src/vdom/actions.js
 
 
-
-
-
-
-
-function thunkInstantiate(vnode)
+const ACTION_MAP =
 {
-    let component = nodeComponent(vnode);
+	replaceNode: commit_replaceNode,
+	appendChild: appendChild,
+	removeChild: removeChild,
+	insertAtIndex: insertAtIndex,
+	moveToIndex: moveToIndex,
+	replaceText: replaceText,
+	setAttribute: setAttribute,
+	removeAttribute: removeAttribute
+};
 
-    if (!component)
-    {
-        let { fn, props } = vnode;
+function action(name, args)
+{ 	
+	let callback = ACTION_MAP[name];
 
-        props = utils.cloneDeep(props);
-
-        component = utils.is_class(fn) ? new fn(props) : fn(props);
-    }
-
-    component.props.children = [jsxFactory(component)];
-
-    return component;
+	return {
+		callback,
+		args
+	};
 }
-
-function thunkUpdate(vnode)
-{
-    let component = vnode.__internals._component;
-    let left      = vnode.children[0];
-    let right     = jsxFactory(component);
-    let actions   = tree(left, right);
-
-    if (!utils.is_empty(actions.current))
-    {
-        commit(actions.current);
-    }
-
-    console.log(vnode);
-}
-
-function thunkRender(component)
-{
-    return jsxFactory(component);
-}
-
-function tree(left, right)
-{ 
-    let actions = 
-    {
-        current : []
-    };
-
-    patch_patch(left, right, actions.current);
-
-    return actions;
-}
-
-function jsxFactory(component)
-{    
-    const jsx = component.render();
-
-    if (jsx.trim() === '')
-    {
-        return createElement();
-    }
-
-    const context = thunk_renderContext(component);
-
-    const result = jsx_parseJSX(jsx, {...context, this: component });
-
-    if (utils.is_array(result))
-    {
-        throw new Error('SyntaxError: Adjacent JSX elements must be wrapped in an enclosing tag. Did you want a JSX fragment <>...</>?');
-    }
-
-    return result;
-}
-
-function thunk_renderContext(component)
-{
-    const exclude = ['constructor', 'render'];
-    const funcs   = Object.getOwnPropertyNames(Object.getPrototypeOf(component));
-    const props   = Object.keys(component);
-    const keys    = [...funcs, ...props];
-    let   ret     = {};
-
-    utils.foreach(keys, function(i, key)
-    {
-        if (!exclude.includes(key))
-        {
-            ret[key] = component[key];
-        }
-    });
-
-    return ret;
-}
-
 ;// CONCATENATED MODULE: ./src/vdom/patch.js
-
 
 
 
@@ -2569,7 +2649,7 @@ function thunk_renderContext(component)
  * Patch left to right
  * 
 */
-function patch_patch(prevNode, nextNode, actions)
+function patch(prevNode, nextNode, actions)
 {       
     // Same nothing to do
     if (prevNode === nextNode)
@@ -2591,10 +2671,6 @@ function patch_patch(prevNode, nextNode, actions)
     else if (isThunk(nextNode))
     {
         patchThunk(prevNode, nextNode, actions);
-    }
-     else if (isFunc(nextNode))
-    {
-        patchFunc(prevNode, nextNode, actions);
     }
     else if (isFragment(nextNode))
     {
@@ -2632,10 +2708,6 @@ function replaceNode(left, right, actions)
             pointVnodeThunk(vnode, component);
         }
     }
-    else if (isFunc(right))
-    {
-        funcRender(right);
-    }
 
     actions.push(action('replaceNode', [left, right]));
 }
@@ -2652,29 +2724,6 @@ function patchNative(left, right, actions)
 
         patchChildren(left, right, actions);
     }
-}
-
-function patchFunc(left, right, actions)
-{        
-    // Same func 
-    if (isSameFunc(left, right))
-    {        
-        diffFunc(left, right, actions);
-    }
-    // Different functions
-    else
-    {
-        funcRender(right);
-
-        actions.push(action('replaceNode', [left, right]));
-    }
-}
-
-function diffFunc(left, right, actions)
-{    
-    funcRender(right);
-
-    patchChildren(left, right, actions);
 }
 
 function patchThunk(left, right, actions)
@@ -2765,7 +2814,7 @@ function patchChildren(left, right, actions)
         if (singleChild(right))
         {                    
             // left and right could be the same / different type, so we need to patch them
-            patch_patch(lChildren[0], rChildren[0], actions);
+            patch(lChildren[0], rChildren[0], actions);
         }
         // We're only removing the left node, nothing to insert
         else if (noChildren(right))
@@ -2779,7 +2828,7 @@ function patchChildren(left, right, actions)
             // Keys and positions haven't changed
             if (lChildren[0].key === rChildren[0].key) 
             {
-                patch_patch(lChildren[0], rChildren[0], actions);
+                patch(lChildren[0], rChildren[0], actions);
 
                 utils.foreach(rChildren, function(i, child)
                 {
@@ -2807,7 +2856,7 @@ function patchChildren(left, right, actions)
             {
                 if (lChild.key === rChildren[0].key)
                 {                    
-                    patch_patch(lChild, rChildren[0], actions);
+                    patch(lChild, rChildren[0], actions);
 
                     matchedKey = true;
                 }
@@ -2866,7 +2915,7 @@ function patchSingleToMultiChildren(left, right, lChild, rChildren, actions)
             // Otherwise we just patch it now
             else
             {
-                patch_patch(lChild, child, actions);
+                patch(lChild, child, actions);
             }
         }
         else
@@ -2880,7 +2929,7 @@ function patchSingleToMultiChildren(left, right, lChild, rChildren, actions)
     {
         actions.push(action('moveToIndex', [left, lChild, newIndex]));
 
-        patch_patch(lChild, rChild, actions);
+        patch(lChild, rChild, actions);
     }
 }
 
@@ -2902,7 +2951,7 @@ function diffChildren(left, right, actions)
     {        
         utils.foreach(right.children, function(i, rChild)
         {
-            patch_patch(left.children[i], rChild, actions);
+            patch(left.children[i], rChild, actions);
         });
 
         return;
@@ -2950,12 +2999,12 @@ function diffChildren(left, right, actions)
             {    
                 subActions.push(action('moveToIndex', [left, lChild, rIndex]));
 
-                patch_patch(lChild, rChild, actions);
+                patch(lChild, rChild, actions);
             }
             // Unmoved / patch
             else
             {
-                patch_patch(lChild, rChild, actions);
+                patch(lChild, rChild, actions);
             }
         }
     });
@@ -3056,21 +3105,53 @@ function diffAttributes(left, right, actions)
     nodeAttributes(left, nAttrs);
 }
 
-;// CONCATENATED MODULE: ./src/vdom/func.js
+;// CONCATENATED MODULE: ./src/vdom/thunk.js
 
 
 
 
-function funcRender(vnode)
-{    
-    let { fn, props } = vnode;
 
-    let child = fn(props);
 
-    vnode.children = [child];
+
+function thunkInstantiate(vnode)
+{
+    let component = nodeComponent(vnode);
+
+    if (!component)
+    {
+        let { fn, props } = vnode;
+
+        props = utils.cloneDeep(props);
+
+        component = utils.is_constructable(fn) ? new fn(props) : fn(props);
+    }
+
+    component.props.children = [jsxFactory(component)];
+
+    return component;
 }
 
-function func_tree(left, right)
+function thunkUpdate(vnode)
+{
+    let component = vnode.__internals._component;
+    let left      = vnode.children[0];
+    let right     = jsxFactory(component);
+    let actions   = tree(left, right);
+
+    if (!utils.is_empty(actions.current))
+    {
+        commit(actions.current);
+    }
+
+    console.log(vnode);
+}
+
+function thunkRender(component)
+{
+    return jsxFactory(component);
+}
+
+function tree(left, right)
 { 
     let actions = 
     {
@@ -3082,8 +3163,52 @@ function func_tree(left, right)
     return actions;
 }
 
-;// CONCATENATED MODULE: ./src/vdom/index.js
+function jsxFactory(component)
+{    
+    if (component.__internals._fn)
+    {
+        return component.render();
+    }
 
+    const jsx = component.render();
+
+    if (jsx.trim() === '')
+    {
+        return createElement();
+    }
+
+    const context = thunk_renderContext(component);
+
+    const result = jsx_parseJSX(jsx, {...context, this: component });
+
+    if (utils.is_array(result))
+    {
+        throw new Error('SyntaxError: Adjacent JSX elements must be wrapped in an enclosing tag. Did you want a JSX fragment <>...</>?');
+    }
+
+    return result;
+}
+
+function thunk_renderContext(component)
+{
+    const exclude = ['constructor', 'render'];
+    const funcs   = Object.getOwnPropertyNames(Object.getPrototypeOf(component));
+    const props   = Object.keys(component);
+    const keys    = [...funcs, ...props];
+    let   ret     = {};
+
+    utils.foreach(keys, function(i, key)
+    {
+        if (!exclude.includes(key))
+        {
+            ret[key] = component[key];
+        }
+    });
+
+    return ret;
+}
+
+;// CONCATENATED MODULE: ./src/vdom/index.js
 
 
 
@@ -3647,9 +3772,6 @@ function createDomElement(vnode, parentDOMElement)
         
         case 'thunk':
             return flatten(createThunk(vnode, parentDOMElement));
-
-        case 'func':
-            return flatten(createFunc(vnode, parentDOMElement));
         
         case 'fragment':
             return flatten(createFragment(vnode, parentDOMElement));
@@ -3764,16 +3886,6 @@ function createThunk(vnode, parentDOMElement)
 
     // Point vnode
     pointVnodeThunk(vnode, component);
-
-    return DOMElement;
-}
-
-function createFunc(vnode, parentDOMElement)
-{
-    funcRender(vnode);
-
-    // Create entire tree recursively
-    let DOMElement = createDomElement(vnode.children[0]);
 
     return DOMElement;
 }
@@ -3975,7 +4087,7 @@ function removeChild(parentVnode, vnode)
 
 function removeEvents(vnode)
 {
-    if (isThunk(vnode) || isFragment(vnode) || isFunc(vnode))
+    if (isThunk(vnode) || isFragment(vnode))
     {
         if (!noChildren(vnode))
         {
@@ -4188,152 +4300,6 @@ function mount(DOMElement, parent)
         parent.appendChild(DOMElement);
     }
 }
-;// CONCATENATED MODULE: ./src/component/index.js
-
-
-
-/**
- * Base component
- * 
- * static getDerivedStateFromProps()
- * componentDidMount()
- * componentWillUnmount()
- * componentWillReceiveProps(nextProps)
- * getSnapshotBeforeUpdate(prevProps, prevState)
- * shouldComponentUpdate(nextProps, nextState)
- * componentWillUpdate(changedProps, changedState)
- * componentDidUpdate(prevProps, prevState, snapshot)
- * componentDidCatch()
- * @class
- */
-class Component
-{
-    /**
-     * Context.
-     *
-     * @var {object}
-     */
-    context = {};
-
-    /**
-     * props.
-     *
-     * @var {object}
-     */
-    props = {};
-
-    /**
-     * Reference to DOM node.
-     *
-     * @var {object}
-     */
-    refs = {};
-
-    /**
-     * State obj
-     *
-     * @var {object}
-     */
-    state = {};
-
-    /**
-     * Default props.
-     *
-     * @var {object}
-     */
-    defaultProps = {};
-
-    /**
-     * Internal use
-     *
-     * @var {object}
-     */
-    __internals = 
-    {
-        vnode     : null,
-        prevState : {},
-        prevProps : {},
-    };
-
-    /**
-     * Constructor
-     *
-     */
-    constructor(props)
-    {
-        this.props = !utils.is_object(props) ? {} : props;
-    }
-
-    setState(key, value, callback)
-    {
-        if (!utils.is_object(this.state))
-        {
-            this.state = {};
-        }
-
-        let stateChanges = {};
-
-        // setState({ 'foo.bar' : 'foo' })
-        if (arguments.length === 1)
-        {
-            if (!utils.is_object(key))
-            {
-                throw new Error('StateError: State should be an object with [dot.notation] keys. e.g. [setState({"foo.bar" : "baz"})]');
-            }
-
-            stateChanges = key;
-        }
-        else
-        {
-            stateChanges[key] = value;
-        }
-
-        this.__internals.prevState = utils.cloneDeep(this.state);
-
-        utils.foreach(stateChanges, function(key, value)
-        {
-            utils.array_set(key, value, this.state);
-            
-        }, this);
-
-        if (!utils.is_equal(this.state, this.__internals.prevState))
-        {
-            thunkUpdate(this.__internals.vnode);
-        }
-    }
-
-    getState(key)
-    {
-        return array_get(key, this.state);
-    }
-
-    jsx(jsx)
-    {
-        const context = renderContext(this);
-
-        return parseJSX(jsx, {...context, this: this});
-    }
-
-    forceUpdate()
-    {
-        thunkUpdate(this.__internals.vnode);
-    }
-}
-
-/**
- * Fragment component
- * 
- * @class
- */
-class Fragment extends Component
-{    
-    constructor(props)
-    {
-        super(props);
-    }
-}
-
-/* harmony default export */ const component = ((/* unused pure expression or super */ null && (Component)));
 ;// CONCATENATED MODULE: ./src/index.js
 
 
@@ -4678,6 +4644,46 @@ class Fragment extends Component
 
         return jsx(`<div>{greeting}</div>`, vars);
     };
+
+    function genCar()
+    {
+
+    }
+
+    /*function Car()
+    {
+        const [brand, setBrand] = useState("Ford");
+        const [model, setModel] = useState("Mustang");
+        const [year, setYear]   = useState("1964");
+        const [color, setColor] = useState("red");
+
+        const genCar = function()
+        {
+            setBrand('Holden');
+            setModel('Commodore');
+            setYear('1999');
+            setColor('yellow');
+        };
+
+        const vars = 
+        {
+            brand  : brand,
+            model  : model,
+            year   : year,
+            color  : color,
+            genCar : genCar 
+        };
+
+        return jsx(`
+            <div>
+                <h1>My {brand}</h1>
+                <p>
+                    It is a {color} {model} from {year}.
+                </p>
+                <button onClick={() => genCar()}>Generate Car</button>
+            </div>`,
+        vars);
+    }*/
 
 
     class App extends Component

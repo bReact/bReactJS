@@ -142,4 +142,45 @@ export class Fragment extends Component
     }
 }
 
+/**
+ * Functional component
+ * 
+ * @class
+ */
+class Factory extends Component
+{
+    /**
+     * Constructor
+     *
+     */
+    constructor(render, props)
+    {
+        super(props);
+
+        this.__internals._fn = render;
+    }
+
+    render()
+    {
+        return this.__internals._fn(this.props);
+    }
+}
+
+/**
+ * Functional component callback
+ * 
+ * @class
+ */
+export function componentFactory(fn)
+{   
+    const factory = function(props)
+    {
+        let component = new Factory(fn, props);
+
+        return component;
+    }
+
+    return factory;
+}
+
 export default Component;

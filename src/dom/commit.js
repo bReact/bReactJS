@@ -182,7 +182,7 @@ export function removeChild(parentVnode, vnode)
 
 function removeEvents(vnode)
 {
-    if (vDOM.isThunk(vnode) || vDOM.isFragment(vnode) || vDOM.isFunc(vnode))
+    if (vDOM.isThunk(vnode) || vDOM.isFragment(vnode))
     {
         if (!vDOM.noChildren(vnode))
         {

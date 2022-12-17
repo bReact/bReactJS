@@ -15,7 +15,7 @@ export function thunkInstantiate(vnode)
 
         props = _.cloneDeep(props);
 
-        component = _.is_class(fn) ? new fn(props) : fn(props);
+        component = _.is_constructable(fn) ? new fn(props) : fn(props);
     }
 
     component.props.children = [jsxFactory(component)];
@@ -57,6 +57,11 @@ function tree(left, right)
 
 function jsxFactory(component)
 {    
+    if (component.__internals._fn)
+    {
+        return component.render();
+    }
+
     const jsx = component.render();
 
     if (jsx.trim() === '')
