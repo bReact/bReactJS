@@ -21,6 +21,9 @@ export function createDomElement(vnode, parentDOMElement)
         
         case 'thunk':
             return flatten(createThunk(vnode, parentDOMElement));
+
+        case 'func':
+            return flatten(createFunc(vnode, parentDOMElement));
         
         case 'fragment':
             return flatten(createFragment(vnode, parentDOMElement));
@@ -135,6 +138,16 @@ function createThunk(vnode, parentDOMElement)
 
     // Point vnode
     vDOM.pointVnodeThunk(vnode, component);
+
+    return DOMElement;
+}
+
+function createFunc(vnode, parentDOMElement)
+{
+    vDOM.funcRender(vnode);
+
+    // Create entire tree recursively
+    let DOMElement = createDomElement(vnode.children[0]);
 
     return DOMElement;
 }

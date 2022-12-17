@@ -182,7 +182,7 @@ export function removeChild(parentVnode, vnode)
 
 function removeEvents(vnode)
 {
-    if (vDOM.isThunk(vnode) || vDOM.isFragment(vnode))
+    if (vDOM.isThunk(vnode) || vDOM.isFragment(vnode) || vDOM.isFunc(vnode))
     {
         if (!vDOM.noChildren(vnode))
         {
@@ -306,7 +306,7 @@ export function moveToIndex(parentVnode, vnode, index)
 }
 
 function moveFragmentDomEls(parentDOMElement, DOMElements, index, currIndex)
-{
+{    
     // Nothing to do
     if (currIndex === index || (index === 0 && parentDOMElement.children.length === 0))
     {
@@ -318,7 +318,7 @@ function moveFragmentDomEls(parentDOMElement, DOMElements, index, currIndex)
     {
         _.foreach(DOMElements, function(i, child)
         {
-            parentDOMElement.insertBefore(child, parentDOMElement.children[i]);
+            parentDOMElement.insertBefore(child, parentDOMElement.firstChild);
         });
     }
     // Move to end

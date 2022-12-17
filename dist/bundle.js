@@ -440,21 +440,85 @@ function is_callable(mixed_var)
  * @param  mixed  mixed_var Variable to evaluate
  * @return bool
  */
-function is_class(mixed_var, classname)
+function is_constructable(mixed_var)
 {
+    // Not a function
+    if (typeof mixed_var !== 'function' || mixed_var === null)
+    {
+        return false;
+    }
+
+    // Native arrow functions
+    if (!mixed_var.prototype || !mixed_var.prototype.constructor)
+    {
+        return false;
+    }
+
+    // ES6 class
+    if (is_class(mixed_var, true))
+    {
+        return true;
+    }
+
+    // If prototype is empty 
+    let excludes = ['constructor', '__proto__', '__defineGetter__', '__defineSetter__', 'hasOwnProperty', '__lookupGetter__', '__lookupSetter__', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'toLocaleString', 'valueOf', '__proto__'];
+    let funcs    = Object.getOwnPropertyNames(Object.getPrototypeOf(mixed_var.prototype));
+    let props    = Object.keys(mixed_var.prototype);
+    let keys     = [...funcs, ...props];
+
+    keys = keys.filter(function(key)
+    {
+        return !excludes.includes(key);
+    });
+
+    return keys.length >= 1;
+}
+
+/**
+ * Checks if variable is a class declaration.
+ *
+ * @param  mixed  mixed_var Variable to evaluate
+ * @return bool
+ */
+function is_class(mixed_var, classname, strict)
+{
+    // is_class(foo, true)
+    if (classname === true || classname === false)
+    {
+        strict = classname;
+        classname = null;
+    }
+    // is_class(foo, 'Bar') || is_class(foo, 'Bar', false)
+    else
+    {
+        strict = typeof strict === 'undefined' ? false : strict;
+    }
+
     if (classname)
     {
         if (typeof mixed_var === 'function')
         {
             let re = new RegExp('^\\s*class\\s+(' + classname + '(\\s+|\\{)|\\w+\\s+extends\\s+' + classname + ')', 'i');
 
-            return re.test(mixed_var.toString());
+            let regRet = re.test(mixed_var.toString());
+
+            if (strict)
+            {
+                return regRet;
+            }
+            
+            return is_constructable(mixed_var) && mixed_var.name === classname;
         }
 
         return false;
     }
 
-    return typeof mixed_var === 'function' && /^\s*class\s+/.test(mixed_var.toString());
+    if (strict)
+    {
+        return typeof mixed_var === 'function' && /^\s*class\s+/.test(mixed_var.toString());
+    }
+
+    return is_constructable(mixed_var);
 }
 
 /**
@@ -784,7 +848,7 @@ function cloneObj(obj)
 
     // Handle classes or functions/objects (functions that return this)
     let ret      = constructorClone(obj);
-    let excludes = ['constructor', '__proto__', '__defineGetter__', '__defineSetter__', 'hasOwnProperty', '__lookupGetter__', '__lookupSetter__', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'valueOf', '__proto__'];
+    let excludes = ['constructor', '__proto__', '__defineGetter__', '__defineSetter__', 'hasOwnProperty', '__lookupGetter__', '__lookupSetter__', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'toLocaleString', 'valueOf', '__proto__'];
     let funcs    = Object.getOwnPropertyNames(Object.getPrototypeOf(obj));
     let props    = Object.keys(obj);
     let keys     = [...funcs, ...props];
@@ -1073,6 +1137,7 @@ const utils_ = {
     is_equal,
     is_htmlElement,
     is_callable,
+    is_constructable,
     is_class,
     callable_name,
     is_null,
@@ -1087,7 +1152,376 @@ const utils_ = {
 };
 
 /* harmony default export */ const utils = (utils_);
+;// CONCATENATED MODULE: ./src/vdom/utils.js
+
+
+/**
+ * Patch a left vnode with a right one
+ */
+
+function patchVnode(left, right)
+{
+    for (let key in left)
+    {
+        delete left[key];
+    }
+
+    for (let key in right)
+    {
+        left[key] = right[key];
+    }
+}
+
+/**
+ * Functional type checking
+ */
+
+let isMounted = (node) =>
+{
+    return _.in_dom(nodeElem(node));
+}
+
+let isFragment = (node) =>
+{
+    return node.type === 'fragment';
+}
+
+let isThunk = (node) =>
+{
+    return node.type === 'thunk';
+}
+
+let isFunc = (node) =>
+{
+    return node.type === 'func';
+}
+
+let isNative = (node) =>
+{
+    return node.type === 'native';
+}
+
+let isText = (node) =>
+{
+    return node.type === 'text';
+}
+
+let isEmpty = (node) =>
+{
+    return node.type === 'empty';
+}
+
+let noChildren = (node) =>
+{
+    return node.children.length === 1 && isEmpty(node.children[0]);
+}
+
+let singleChild = (node) =>
+{
+    return node.children.length === 1 && !isEmpty(node.children[0]);
+}
+
+let isSameThunk = (left, right) =>
+{
+    return isThunk(left) && isThunk(right) && left.fn === right.fn;
+}
+
+let isSameFunc = (left, right) =>
+{
+    return isFunc(left) && isFunc(right) && left.fn === right.fn;
+}
+
+let isThunkInstantiated = (vnode) =>
+{
+    return nodeComponent(vnode) !== null;
+}
+
+let isSameFragment = (left, right) =>
+{
+    return isFragment(left) && isFragment(right) && left.fn === right.fn;
+}
+
+/**
+ * Checks if thunk is nesting only a fragment.
+ */
+
+let isNestingFragment = (node) =>
+{
+    if ((isThunk(node) && isThunkInstantiated(node)) || isFunc(node))
+    {
+        while (node.children && (isThunk(node) || isFunc(node)))
+        {
+            node = node.children[0];
+        }
+
+        return isFragment(node);
+    }
+
+    return false;
+}
+
+/**
+ * Returns thunk function / class name
+ */
+
+let thunkName = (node) =>
+{
+    return node.__internals._name;
+}
+
+/**
+ * Get/set a nodes DOM element
+ */
+
+let nodeElem = (node, elem) =>
+{
+    if (!utils.is_undefined(elem))
+    {
+        node.__internals._domEl = elem;
+
+        return elem;
+    }
+
+    if (isThunk(node) || isFragment(node) || isFunc(node))
+    {
+        return findThunkDomEl(node);
+    }
+
+    return node.__internals._domEl;
+}
+
+/**
+ * Returns the actual parent DOMElement of a parent node.
+ * 
+ */
+
+let nodeElemParent = (parent) =>
+{
+    if (isFragment(parent) || isThunk(parent) || isFunc(parent))
+    {
+        let child = nodeElem(parent);
+
+        return utils.is_array(child) ? child[0].parentNode : child.parentNode;
+    }
+
+    return nodeElem(parent);
+}
+
+/**
+ * Returns the parent DOMElement of a given vnNode
+ * 
+ */
+
+let parentElem = (node) =>
+{
+    // Native node
+    if (isNative(node) || isText(node) || isEmpty(node))
+    {
+        return nodeElem(node).parentNode;
+    }
+    
+    // Thunks / fragments with a direct child
+    let child = vnode.children[0];
+
+    if (isNative(child) || isText(child) || isEmpty(child))
+    {
+        return nodeElem(child).parentNode;
+    }
+
+    // Recursively traverse down tree until either a DOM node is found
+    // or a fragment is found and return it's parent
+
+    while (isThunk(child) || isFragment(child) || isFunc(child))
+    {
+        vnode = child;
+        child = child.children[0];
+    }
+
+    return isFragment(vnode) ? nodeElem(vnode.children[0]).parentNode : nodeElem(vnode).parentNode;
+}
+
+/**
+ * Returns the parent DOMElement of a given vnNode
+ * 
+ */
+
+let childDomIndex = (parent, index) =>
+{
+    if (parent.children.length <= 1)
+    {
+        return 0;
+    }
+
+    let buffer = 0;
+
+    utils.foreach(parent.children, function(i, child)
+    {
+        if (i >= index)
+        {
+            return false;
+        }
+        else if (isThunk(child) || isFunc(child))
+        {
+            let els = nodeElem(child);
+
+            if (utils.is_array(els))
+            {
+                buffer += els.length;
+            }
+        }
+    });
+
+    return buffer + index;
+}
+
+/**
+ * Get/set a nodes DOM element
+ */
+
+let nodeAttributes = (node, attrs) =>
+{
+    if (!utils.is_undefined(attrs))
+    {
+        node.__internals._prevAttrs = node.attributes;
+
+        node.attributes = attrs;
+    }
+
+    return node.attributes;
+}
+
+/**
+ * Get/set a nodes component
+ */
+
+let nodeComponent = (node, component) =>
+{
+    if (!utils.is_undefined(component))
+    {
+        node.__internals._component = component;
+    }
+
+    return node.__internals._component;
+}
+
+// Recursively traverse down tree until either a DOM node is found
+// or a fragment is found and return it's children
+
+function findThunkDomEl(vnode)
+{
+    if (isNative(vnode) || isText(vnode) || isEmpty(vnode))
+    {
+        return nodeElem(vnode);
+    }
+
+    let child = vnode.children[0];
+
+    while (isThunk(child) || isFragment(child) || isFunc(child))
+    {
+        vnode = child;
+        child = child.children[0];
+    }
+
+    return isFragment(vnode) ? 
+        utils.map(vnode.children, function(i, child)
+        { 
+            return nodeElem(child); 
+        }) 
+        : nodeElem(vnode);
+}
+
+// Recursively traverse down tree until either a DOM node is found
+// or a fragment is found and return it's children
+
+function findThunkParentDomEl(vnode)
+{
+    let child = vnode.children[0];
+
+    if (isNative(child) || isText(child) || isEmpty(child))
+    {
+        return nodeElem(child).parentNode;
+    }
+
+    while (isThunk(child) || isFragment(child) || isFunc(child))
+    {
+        vnode = child;
+        child = child.children[0];
+    }
+
+    return isFragment(vnode) ? nodeElem(vnode.children[0]).parentNode : nodeElem(vnode).parentNode;
+}
+
+/**
+ * Points vnode -> component and component -> vndode
+ */
+
+let pointVnodeThunk = (vnode, component) =>
+{
+    // point vnode -> component
+    vnode.__internals._component = component;
+
+    // point component -> vnode
+    component.__internals.vnode = vnode;
+
+    // Point vnode.children -> component.props.children
+    if (component.props && component.props.children)
+    {
+        vnode.children = component.props.children;
+    }
+}
+
+function patchVnodes(left, right)
+{
+    utils.foreach(left, function(key, val)
+    {
+        let rval = right[key];
+
+        if (utils.is_undefined(rval))
+        {
+            delete left[key];
+        }
+        else
+        {
+            left[key] = rval;
+        }
+    });
+}
+
+/**
+ * Recursively calls unmount on nested components
+ * in a sub tree
+ */
+
+let nodeWillUnmount = (vnode) =>
+{
+    if (isThunk(vnode) || isFragment(vnode) || isFunc(vnode))
+    {
+        let component = nodeComponent(vnode);
+
+        if (component && utils.is_callable(component.componentWillUnmount))
+        {
+            component.componentWillUnmount();
+        }
+
+        if (!noChildren(vnode))
+        {
+            utils.foreach(vnode.children, function(i, child)
+            {
+                nodeWillUnmount(child);
+            });
+        }
+    }
+    else if (isNative(vnode) && !noChildren(vnode))
+    {
+        utils.foreach(vnode.children, function(i, child)
+        {
+            nodeWillUnmount(child);
+        });
+    }
+}
 ;// CONCATENATED MODULE: ./src/vdom/element.js
+
+
 
 
 /**
@@ -1154,6 +1588,11 @@ function createElement(tag, props, ...children)
 
     if (typeof tag === 'function')
     {
+        if (!utils.is_constructable(tag))
+        {
+            return createFunctionalThunk(tag, normalizedProps, children, key, ref);
+        }
+
         return createThunkElement(tag, normalizedProps, children, key, ref);
     }
 
@@ -1325,363 +1764,51 @@ function createThunkElement(fn, props, children, key, ref)
 }
 
 /**
- * Patch a left vnode with a right one
+ * Lazily-rendered virtual nodes
  */
 
-function patchVnode(left, right)
+function createFunctionalThunk(fn, props, children, key, ref)
 {
-    for (let key in left)
-    {
-        delete left[key];
-    }
-
-    for (let key in right)
-    {
-        left[key] = right[key];
-    }
-}
-
-/**
- * Functional type checking
- */
-
-let isMounted = (node) =>
-{
-    return _.in_dom(nodeElem(node));
-}
-
-let isFragment = (node) =>
-{
-    return node.type === 'fragment';
-}
-
-let isThunk = (node) =>
-{
-    return node.type === 'thunk';
-}
-
-let isNative = (node) =>
-{
-    return node.type === 'native';
-}
-
-let isText = (node) =>
-{
-    return node.type === 'text';
-}
-
-let isEmpty = (node) =>
-{
-    return node.type === 'empty';
-}
-
-let noChildren = (node) =>
-{
-    return node.children.length === 1 && isEmpty(node.children[0]);
-}
-
-let singleChild = (node) =>
-{
-    return node.children.length === 1 && !isEmpty(node.children[0]);
-}
-
-let isSameThunk = (left, right) =>
-{
-    return isThunk(left) && isThunk(right) && left.fn === right.fn;
-}
-
-let isThunkInstantiated = (vnode) =>
-{
-    return nodeComponent(vnode) !== null;
-}
-
-let isSameFragment = (left, right) =>
-{
-    return isFragment(left) && isFragment(right) && left.fn === right.fn;
-}
-
-/**
- * Checks if thunk is nesting only a fragment.
- */
-
-let isNestingFragment = (node) =>
-{
-    if (isThunk(node) && isThunkInstantiated(node))
-    {
-        while (node.children && isThunk(node))
+    return {
+        type: 'func',
+        fn,
+        children : null,
+        props,
+        key,
+        __internals:
         {
-            node = node.children[0];
-        }
-
-        return isFragment(node);
-    }
-
-    return false;
-}
-
-/**
- * Returns thunk function / class name
- */
-
-let thunkName = (node) =>
-{
-    return node.__internals._name;
-}
-
-/**
- * Get/set a nodes DOM element
- */
-
-let nodeElem = (node, elem) =>
-{
-    if (!utils.is_undefined(elem))
-    {
-        node.__internals._domEl = elem;
-
-        return elem;
-    }
-
-    if (isThunk(node) || isFragment(node))
-    {
-        return findThunkDomEl(node);
-    }
-
-    return node.__internals._domEl;
-}
-
-/**
- * Returns the actual parent DOMElement of a parent node.
- * 
- */
-
-let nodeElemParent = (parent) =>
-{
-    if (isFragment(parent) || isThunk(parent))
-    {
-        let child = nodeElem(parent);
-
-        return utils.is_array(child) ? child[0].parentNode : child.parentNode;
-    }
-
-    return nodeElem(parent);
-}
-
-/**
- * Returns the parent DOMElement of a given vnNode
- * 
- */
-
-let parentElem = (node) =>
-{
-    // Native node
-    if (isNative(node) || isText(node) || isEmpty(node))
-    {
-        return nodeElem(node).parentNode;
-    }
-    
-    // Thunks / fragments with a direct child
-    let child = vnode.children[0];
-
-    if (isNative(child) || isText(child) || isEmpty(child))
-    {
-        return nodeElem(child).parentNode;
-    }
-
-    // Recursively traverse down tree until either a DOM node is found
-    // or a fragment is found and return it's parent
-
-    while (isThunk(child) || isFragment(child))
-    {
-        vnode = child;
-        child = child.children[0];
-    }
-
-    return isFragment(vnode) ? nodeElem(vnode.children[0]).parentNode : nodeElem(vnode).parentNode;
-}
-
-/**
- * Returns the parent DOMElement of a given vnNode
- * 
- */
-
-let childDomIndex = (parent, index) =>
-{
-    if (parent.children.length <= 1)
-    {
-        return 0;
-    }
-
-    let buffer = 0;
-
-    utils.foreach(parent.children, function(i, child)
-    {
-        if (vnode === child)
-        {
-            return false;
-        }
-        else if (isThunk(child))
-        {
-            let els = nodeElem(child);
-
-            if (utils.is_array(els))
-            {
-                buffer += els.length;
-            }
-        }
-    });
-
-    return buffer + index;
-}
-
-/**
- * Get/set a nodes DOM element
- */
-
-let nodeAttributes = (node, attrs) =>
-{
-    if (!utils.is_undefined(attrs))
-    {
-        node.__internals._prevAttrs = node.attributes;
-
-        node.attributes = attrs;
-    }
-
-    return node.attributes;
-}
-
-/**
- * Get/set a nodes component
- */
-
-let nodeComponent = (node, component) =>
-{
-    if (!utils.is_undefined(component))
-    {
-        node.__internals._component = component;
-    }
-
-    return node.__internals._component;
-}
-
-// Recursively traverse down tree until either a DOM node is found
-// or a fragment is found and return it's children
-
-function findThunkDomEl(vnode)
-{
-    if (isNative(vnode) || isText(vnode) || isEmpty(vnode))
-    {
-        return nodeElem(vnode);
-    }
-
-    let child = vnode.children[0];
-
-    while (isThunk(child) || isFragment(child))
-    {
-        vnode = child;
-        child = child.children[0];
-    }
-
-    return isFragment(vnode) ? 
-        utils.map(vnode.children, function(i, child)
-        { 
-            return nodeElem(child); 
-        }) 
-        : nodeElem(vnode);
-}
-
-// Recursively traverse down tree until either a DOM node is found
-// or a fragment is found and return it's children
-
-function findThunkParentDomEl(vnode)
-{
-    let child = vnode.children[0];
-
-    if (isNative(child) || isText(child) || isEmpty(child))
-    {
-        return nodeElem(child).parentNode;
-    }
-
-    while (isThunk(child) || isFragment(child))
-    {
-        vnode = child;
-        child = child.children[0];
-    }
-
-    return isFragment(vnode) ? nodeElem(vnode.children[0]).parentNode : nodeElem(vnode).parentNode;
-}
-
-/**
- * Points vnode -> component and component -> vndode
- */
-
-let pointVnodeThunk = (vnode, component) =>
-{
-    // point vnode -> component
-    vnode.__internals._component = component;
-
-    // point component -> vnode
-    component.__internals.vnode = vnode;
-
-    // Point vnode.children -> component.props.children
-    if (component.props && component.props.children)
-    {
-        vnode.children = component.props.children;
-    }
-}
-
-function patchVnodes(left, right)
-{
-    utils.foreach(left, function(key, val)
-    {
-        let rval = right[key];
-
-        if (utils.is_undefined(rval))
-        {
-            delete left[key];
-        }
-        else
-        {
-            left[key] = rval;
-        }
-    });
-}
-
-/**
- * Recursively calls unmount on nested components
- * in a sub tree
- */
-
-let nodeWillUnmount = (vnode) =>
-{
-    if (isThunk(vnode) || isFragment(vnode))
-    {
-        let component = nodeComponent(vnode);
-
-        if (component && utils.is_callable(component.componentWillUnmount))
-        {
-            component.componentWillUnmount();
-        }
-
-        if (!noChildren(vnode))
-        {
-            utils.foreach(vnode.children, function(i, child)
-            {
-                nodeWillUnmount(child);
-            });
+            _domEl: null,
+            _name : utils.callable_name(fn)
         }
     }
-    else if (isNative(vnode) && !noChildren(vnode))
-    {
-        utils.foreach(vnode.children, function(i, child)
-        {
-            nodeWillUnmount(child);
-        });
-    }
 }
-
 
 
 /* harmony default export */ const vdom_element = ((/* unused pure expression or super */ null && (createElement)));
+;// CONCATENATED MODULE: ./src/vdom/actions.js
+
+
+const ACTION_MAP =
+{
+	replaceNode: commit_replaceNode,
+	appendChild: appendChild,
+	removeChild: removeChild,
+	insertAtIndex: insertAtIndex,
+	moveToIndex: moveToIndex,
+	replaceText: replaceText,
+	setAttribute: setAttribute,
+	removeAttribute: removeAttribute
+};
+
+function action(name, args)
+{ 	
+	let callback = ACTION_MAP[name];
+
+	return {
+		callback,
+		args
+	};
+}
 ;// CONCATENATED MODULE: ./src/jsx/Parser.js
 function oneObject(str) {
     var obj = {}
@@ -2318,35 +2445,121 @@ innerClass.prototype =
 ;// CONCATENATED MODULE: ./src/jsx/index.js
 
 
+
 function jsx_parseJSX(jsx, obj, config)
 {
 	return evaluate(jsx, obj, config);
 }
-;// CONCATENATED MODULE: ./src/vdom/actions.js
 
-
-const ACTION_MAP =
+function jsx(str, vars)
 {
-	replaceNode: commit_replaceNode,
-	appendChild: appendChild,
-	removeChild: removeChild,
-	insertAtIndex: insertAtIndex,
-	moveToIndex: moveToIndex,
-	replaceText: replaceText,
-	setAttribute: setAttribute,
-	removeAttribute: removeAttribute
-};
+	if (!is_undefined(vars) && !is_object(vars))
+	{
+		throw new Error('Variables should be supplied to [jsx] as an object e.g [jsx("<div class={name} />", {name: "foo"})]');
+	}
 
-function action(name, args)
-{ 	
-	let callback = ACTION_MAP[name];
-
-	return {
-		callback,
-		args
-	};
+	return evaluate(str, vars);
 }
+;// CONCATENATED MODULE: ./src/vdom/thunk.js
+
+
+
+
+
+
+
+function thunkInstantiate(vnode)
+{
+    let component = nodeComponent(vnode);
+
+    if (!component)
+    {
+        let { fn, props } = vnode;
+
+        props = utils.cloneDeep(props);
+
+        component = utils.is_class(fn) ? new fn(props) : fn(props);
+    }
+
+    component.props.children = [jsxFactory(component)];
+
+    return component;
+}
+
+function thunkUpdate(vnode)
+{
+    let component = vnode.__internals._component;
+    let left      = vnode.children[0];
+    let right     = jsxFactory(component);
+    let actions   = tree(left, right);
+
+    if (!utils.is_empty(actions.current))
+    {
+        commit(actions.current);
+    }
+
+    console.log(vnode);
+}
+
+function thunkRender(component)
+{
+    return jsxFactory(component);
+}
+
+function tree(left, right)
+{ 
+    let actions = 
+    {
+        current : []
+    };
+
+    patch_patch(left, right, actions.current);
+
+    return actions;
+}
+
+function jsxFactory(component)
+{    
+    const jsx = component.render();
+
+    if (jsx.trim() === '')
+    {
+        return createElement();
+    }
+
+    const context = thunk_renderContext(component);
+
+    const result = jsx_parseJSX(jsx, {...context, this: component });
+
+    if (utils.is_array(result))
+    {
+        throw new Error('SyntaxError: Adjacent JSX elements must be wrapped in an enclosing tag. Did you want a JSX fragment <>...</>?');
+    }
+
+    return result;
+}
+
+function thunk_renderContext(component)
+{
+    const exclude = ['constructor', 'render'];
+    const funcs   = Object.getOwnPropertyNames(Object.getPrototypeOf(component));
+    const props   = Object.keys(component);
+    const keys    = [...funcs, ...props];
+    let   ret     = {};
+
+    utils.foreach(keys, function(i, key)
+    {
+        if (!exclude.includes(key))
+        {
+            ret[key] = component[key];
+        }
+    });
+
+    return ret;
+}
+
 ;// CONCATENATED MODULE: ./src/vdom/patch.js
+
 
 
 
@@ -2356,7 +2569,7 @@ function action(name, args)
  * Patch left to right
  * 
 */
-function patch(prevNode, nextNode, actions)
+function patch_patch(prevNode, nextNode, actions)
 {       
     // Same nothing to do
     if (prevNode === nextNode)
@@ -2378,6 +2591,10 @@ function patch(prevNode, nextNode, actions)
     else if (isThunk(nextNode))
     {
         patchThunk(prevNode, nextNode, actions);
+    }
+     else if (isFunc(nextNode))
+    {
+        patchFunc(prevNode, nextNode, actions);
     }
     else if (isFragment(nextNode))
     {
@@ -2415,6 +2632,10 @@ function replaceNode(left, right, actions)
             pointVnodeThunk(vnode, component);
         }
     }
+    else if (isFunc(right))
+    {
+        funcRender(right);
+    }
 
     actions.push(action('replaceNode', [left, right]));
 }
@@ -2433,23 +2654,25 @@ function patchNative(left, right, actions)
     }
 }
 
-function patchThunkProps(vnode, newProps)
-{    
-    let component = nodeComponent(vnode);
+function patchFunc(left, right, actions)
+{        
+    // Same func 
+    if (isSameFunc(left, right))
+    {        
+        diffFunc(left, right, actions);
+    }
+    // Different functions
+    else
+    {
+        funcRender(right);
 
-    component.__internals.prevProps = utils.cloneDeep(vnode.props);
-
-    component.props = newProps;
-
-    vnode.props = newProps;
+        actions.push(action('replaceNode', [left, right]));
+    }
 }
 
-function diffThunk(left, right, actions)
+function diffFunc(left, right, actions)
 {    
-    let component  = nodeComponent(left);
-    let leftChild  = left.children[0];
-    let rightchild = thunkRender(component);
-    right.children = [rightchild];
+    funcRender(right);
 
     patchChildren(left, right, actions);
 }
@@ -2472,6 +2695,26 @@ function patchThunk(left, right, actions)
 
         actions.push(action('replaceNode', [left, right]));
     }
+}
+
+function patchThunkProps(vnode, newProps)
+{    
+    let component = nodeComponent(vnode);
+
+    component.__internals.prevProps = utils.cloneDeep(vnode.props);
+
+    component.props = newProps;
+
+    vnode.props = newProps;
+}
+
+function diffThunk(left, right, actions)
+{    
+    let component  = nodeComponent(left);
+    let rightchild = thunkRender(component);
+    right.children = [rightchild];
+
+    patchChildren(left, right, actions);
 }
 
 function patchFragment(left, right, actions)
@@ -2522,7 +2765,7 @@ function patchChildren(left, right, actions)
         if (singleChild(right))
         {                    
             // left and right could be the same / different type, so we need to patch them
-            patch(lChildren[0], rChildren[0], actions);
+            patch_patch(lChildren[0], rChildren[0], actions);
         }
         // We're only removing the left node, nothing to insert
         else if (noChildren(right))
@@ -2536,7 +2779,7 @@ function patchChildren(left, right, actions)
             // Keys and positions haven't changed
             if (lChildren[0].key === rChildren[0].key) 
             {
-                patch(lChildren[0], rChildren[0], actions);
+                patch_patch(lChildren[0], rChildren[0], actions);
 
                 utils.foreach(rChildren, function(i, child)
                 {
@@ -2564,7 +2807,7 @@ function patchChildren(left, right, actions)
             {
                 if (lChild.key === rChildren[0].key)
                 {                    
-                    patch(lChild, rChildren[0], actions);
+                    patch_patch(lChild, rChildren[0], actions);
 
                     matchedKey = true;
                 }
@@ -2623,7 +2866,7 @@ function patchSingleToMultiChildren(left, right, lChild, rChildren, actions)
             // Otherwise we just patch it now
             else
             {
-                patch(lChild, child, actions);
+                patch_patch(lChild, child, actions);
             }
         }
         else
@@ -2637,7 +2880,7 @@ function patchSingleToMultiChildren(left, right, lChild, rChildren, actions)
     {
         actions.push(action('moveToIndex', [left, lChild, newIndex]));
 
-        patch(lChild, rChild, actions);
+        patch_patch(lChild, rChild, actions);
     }
 }
 
@@ -2659,7 +2902,7 @@ function diffChildren(left, right, actions)
     {        
         utils.foreach(right.children, function(i, rChild)
         {
-            patch(left.children[i], rChild, actions);
+            patch_patch(left.children[i], rChild, actions);
         });
 
         return;
@@ -2707,12 +2950,12 @@ function diffChildren(left, right, actions)
             {    
                 subActions.push(action('moveToIndex', [left, lChild, rIndex]));
 
-                patch(lChild, rChild, actions);
+                patch_patch(lChild, rChild, actions);
             }
             // Unmoved / patch
             else
             {
-                patch(lChild, rChild, actions);
+                patch_patch(lChild, rChild, actions);
             }
         }
     });
@@ -2813,52 +3056,21 @@ function diffAttributes(left, right, actions)
     nodeAttributes(left, nAttrs);
 }
 
-;// CONCATENATED MODULE: ./src/vdom/thunk.js
+;// CONCATENATED MODULE: ./src/vdom/func.js
 
 
 
 
+function funcRender(vnode)
+{    
+    let { fn, props } = vnode;
 
+    let child = fn(props);
 
-function thunkInstantiate(vnode)
-{
-    let component = nodeComponent(vnode);
-
-    if (!component)
-    {
-        let { fn, props } = vnode;
-
-        props = utils.cloneDeep(props);
-
-        component = utils.is_class(fn) ? new fn(props) : fn(props);
-    }
-
-    component.props.children = [jsxFactory(component)];
-
-    return component;
+    vnode.children = [child];
 }
 
-function thunkUpdate(vnode)
-{
-    let component = vnode.__internals._component;
-    let left      = vnode.children[0];
-    let right     = jsxFactory(component);
-    let actions   = tree(left, right);
-
-    if (!utils.is_empty(actions.current))
-    {
-        commit(actions.current);
-    }
-
-    console.log(vnode);
-}
-
-function thunkRender(component)
-{
-    return jsxFactory(component);
-}
-
-function tree(left, right)
+function func_tree(left, right)
 { 
     let actions = 
     {
@@ -2870,47 +3082,8 @@ function tree(left, right)
     return actions;
 }
 
-function jsxFactory(component)
-{    
-    const jsx = component.render();
-
-    if (jsx.trim() === '')
-    {
-        return createElement();
-    }
-
-    const context = thunk_renderContext(component);
-
-    const result = jsx_parseJSX(jsx, {...context, this: component });
-
-    if (utils.is_array(result))
-    {
-        throw new Error('SyntaxError: Adjacent JSX elements must be wrapped in an enclosing tag. Did you want a JSX fragment <>...</>?');
-    }
-
-    return result;
-}
-
-function thunk_renderContext(component)
-{
-    const exclude = ['constructor', 'render'];
-    const funcs   = Object.getOwnPropertyNames(Object.getPrototypeOf(component));
-    const props   = Object.keys(component);
-    const keys    = [...funcs, ...props];
-    let   ret     = {};
-
-    utils.foreach(keys, function(i, key)
-    {
-        if (!exclude.includes(key))
-        {
-            ret[key] = component[key];
-        }
-    });
-
-    return ret;
-}
-
 ;// CONCATENATED MODULE: ./src/vdom/index.js
+
 
 
 
@@ -3474,6 +3647,9 @@ function createDomElement(vnode, parentDOMElement)
         
         case 'thunk':
             return flatten(createThunk(vnode, parentDOMElement));
+
+        case 'func':
+            return flatten(createFunc(vnode, parentDOMElement));
         
         case 'fragment':
             return flatten(createFragment(vnode, parentDOMElement));
@@ -3588,6 +3764,16 @@ function createThunk(vnode, parentDOMElement)
 
     // Point vnode
     pointVnodeThunk(vnode, component);
+
+    return DOMElement;
+}
+
+function createFunc(vnode, parentDOMElement)
+{
+    funcRender(vnode);
+
+    // Create entire tree recursively
+    let DOMElement = createDomElement(vnode.children[0]);
 
     return DOMElement;
 }
@@ -3789,7 +3975,7 @@ function removeChild(parentVnode, vnode)
 
 function removeEvents(vnode)
 {
-    if (isThunk(vnode) || isFragment(vnode))
+    if (isThunk(vnode) || isFragment(vnode) || isFunc(vnode))
     {
         if (!noChildren(vnode))
         {
@@ -3913,7 +4099,7 @@ function moveToIndex(parentVnode, vnode, index)
 }
 
 function moveFragmentDomEls(parentDOMElement, DOMElements, index, currIndex)
-{
+{    
     // Nothing to do
     if (currIndex === index || (index === 0 && parentDOMElement.children.length === 0))
     {
@@ -3925,7 +4111,7 @@ function moveFragmentDomEls(parentDOMElement, DOMElements, index, currIndex)
     {
         utils.foreach(DOMElements, function(i, child)
         {
-            parentDOMElement.insertBefore(child, parentDOMElement.children[i]);
+            parentDOMElement.insertBefore(child, parentDOMElement.firstChild);
         });
     }
     // Move to end
@@ -4152,6 +4338,7 @@ class Fragment extends Component
 
 
 
+
 ;// CONCATENATED MODULE: ./index.js
 
 
@@ -4272,26 +4459,6 @@ class Fragment extends Component
         }
     }
 
-    class ThunkNest2 extends Component
-    {        
-        render()
-        {
-            return `<div>ThunkNest2</div>`;
-        }
-    }
-
-    class ThunkNest1 extends Component
-    {
-        ThunkNest2 = ThunkNest2;
-        
-        render()
-        {
-            return `
-                <ThunkNest2 />
-            `;
-        }
-    }
-
     class Foo extends Component
     {
         constructor(props)
@@ -4380,12 +4547,6 @@ class Fragment extends Component
                 </div>
             `;*/
 
-           
-            return `
-                <div>
-                    <FragmentNest1 testprop={this.state.counter} />
-                </div>
-            `;
 
             if (this.state.counter === 2)
             {
@@ -4458,25 +4619,89 @@ class Fragment extends Component
         }
     }
 
-    const initialProps =
+    /*const themes =
     {
-        string: "foo", 
-        number: 5,
-        boolean: true
+        light:
+        {
+            foreground: '#000000',
+            background: '#eeeeee',
+        },
+        dark:
+        {
+            foreground: '#ffffff',
+            background: '#222222',
+        }
+    };
+
+    const ThemeContext = createContext(themes.dark);
+
+    class ThemedButton extends Component
+    {
+        static contextType = ThemeContext;
+
+        theme = this.context;
+
+        render()
+        {            
+            return (`<button style={{backgroundColor: theme.background}}>Hello!</button>`);
+        }
+    }
+
+    class ThunkNest1 extends Component
+    {
+        ThemedButton = ThemedButton;
+        
+        render()
+        {
+            return `
+                <ThunkNest2 />
+            `;
+        }
+    }*/
+
+    const FunctionalCompArrow = (props) =>
+    {
+        let vars = 
+        {
+            greeting : 'Hello World!'
+        };
+
+        return jsx(`<div>{greeting}</div>`, vars);
+    };
+
+    const FunctionalCompVar = function(props)
+    {
+        let vars = 
+        {
+            greeting : 'Hello World!'
+        };
+
+        return jsx(`<div>{greeting}</div>`, vars);
     };
 
 
-    const TestFunc = (props) =>
+    class App extends Component
     {
-        console.log(this);
+        ArrowFunc = FunctionalCompArrow;
+        FuncFunc  = FunctionalCompVar;
 
-        let name = 'test';
+        constructor(props)
+        {
+            super(props);
+        }
 
-        return `<div>hello world{this.name}</div>`;
-    };
+        render()
+        {
+             return `
+                <div>
+                    <ArrowFunc />
+                    <FuncFunc />
+                </div>
+            `;
+        }
+    }
 
-    render(Foo, document.getElementById('app'));
-
+    render(App, document.getElementById('app'));
 
 })();
 /******/ })()

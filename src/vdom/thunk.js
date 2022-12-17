@@ -1,5 +1,6 @@
-import { createElement, nodeComponent, isNative, isThunk, isFragment } from './element';
-import parseJSX from '../jsx/index';
+import { createElement } from './element';
+import { nodeComponent, isNative, isThunk, isFragment } from './utils';
+import { parseJSX } from '../jsx/index';
 import { commit } from '../dom/index';
 import { patch } from './patch';
 import _ from '../utils/index';

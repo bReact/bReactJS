@@ -1,6 +1,7 @@
 import { action } from './actions';
-import * as vElem from './element';
+import * as vElem from './utils';
 import * as thunk from './thunk';
+import * as func  from './func';
 import _ from '../utils/index';
 
 /**
@@ -29,6 +30,10 @@ export function patch(prevNode, nextNode, actions)
     else if (vElem.isThunk(nextNode))
     {
         patchThunk(prevNode, nextNode, actions);
+    }
+     else if (vElem.isFunc(nextNode))
+    {
+        patchFunc(prevNode, nextNode, actions);
     }
     else if (vElem.isFragment(nextNode))
     {
@@ -66,6 +71,10 @@ function replaceNode(left, right, actions)
             vElem.pointVnodeThunk(vnode, component);
         }
     }
+    else if (vElem.isFunc(right))
+    {
+        func.funcRender(right);
+    }
 
     actions.push(action('replaceNode', [left, right]));
 }
@@ -84,23 +93,25 @@ function patchNative(left, right, actions)
     }
 }
 
-function patchThunkProps(vnode, newProps)
-{    
-    let component = vElem.nodeComponent(vnode);
+function patchFunc(left, right, actions)
+{        
+    // Same func 
+    if (vElem.isSameFunc(left, right))
+    {        
+        diffFunc(left, right, actions);
+    }
+    // Different functions
+    else
+    {
+        func.funcRender(right);
 
-    component.__internals.prevProps = _.cloneDeep(vnode.props);
-
-    component.props = newProps;
-
-    vnode.props = newProps;
+        actions.push(action('replaceNode', [left, right]));
+    }
 }
 
-function diffThunk(left, right, actions)
+function diffFunc(left, right, actions)
 {    
-    let component  = vElem.nodeComponent(left);
-    let leftChild  = left.children[0];
-    let rightchild = thunk.thunkRender(component);
-    right.children = [rightchild];
+    func.funcRender(right);
 
     patchChildren(left, right, actions);
 }
@@ -123,6 +134,26 @@ function patchThunk(left, right, actions)
 
         actions.push(action('replaceNode', [left, right]));
     }
+}
+
+function patchThunkProps(vnode, newProps)
+{    
+    let component = vElem.nodeComponent(vnode);
+
+    component.__internals.prevProps = _.cloneDeep(vnode.props);
+
+    component.props = newProps;
+
+    vnode.props = newProps;
+}
+
+function diffThunk(left, right, actions)
+{    
+    let component  = vElem.nodeComponent(left);
+    let rightchild = thunk.thunkRender(component);
+    right.children = [rightchild];
+
+    patchChildren(left, right, actions);
 }
 
 function patchFragment(left, right, actions)

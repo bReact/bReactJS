@@ -1,4 +1,4 @@
-import { render, Component, createElement, Fragment } from './src/index';
+import { render, Component, createElement, Fragment, jsx } from './src/index';
 
 (function()
 {
@@ -117,26 +117,6 @@ import { render, Component, createElement, Fragment } from './src/index';
         }
     }
 
-    class ThunkNest2 extends Component
-    {        
-        render()
-        {
-            return `<div>ThunkNest2</div>`;
-        }
-    }
-
-    class ThunkNest1 extends Component
-    {
-        ThunkNest2 = ThunkNest2;
-        
-        render()
-        {
-            return `
-                <ThunkNest2 />
-            `;
-        }
-    }
-
     class Foo extends Component
     {
         constructor(props)
@@ -225,12 +205,6 @@ import { render, Component, createElement, Fragment } from './src/index';
                 </div>
             `;*/
 
-           
-            return `
-                <div>
-                    <FragmentNest1 testprop={this.state.counter} />
-                </div>
-            `;
 
             if (this.state.counter === 2)
             {
@@ -303,24 +277,131 @@ import { render, Component, createElement, Fragment } from './src/index';
         }
     }
 
-    const initialProps =
+    /*const themes =
     {
-        string: "foo", 
-        number: 5,
-        boolean: true
+        light:
+        {
+            foreground: '#000000',
+            background: '#eeeeee',
+        },
+        dark:
+        {
+            foreground: '#ffffff',
+            background: '#222222',
+        }
     };
 
+    const ThemeContext = createContext(themes.dark);
 
-    const TestFunc = (props) =>
+    class ThemedButton extends Component
     {
-        console.log(this);
+        static contextType = ThemeContext;
 
-        let name = 'test';
+        theme = this.context;
 
-        return `<div>hello world{this.name}</div>`;
+        render()
+        {            
+            return (`<button style={{backgroundColor: theme.background}}>Hello!</button>`);
+        }
+    }
+
+    class ThunkNest1 extends Component
+    {
+        ThemedButton = ThemedButton;
+        
+        render()
+        {
+            return `
+                <ThunkNest2 />
+            `;
+        }
+    }*/
+
+    const FunctionalCompArrow = (props) =>
+    {
+        let vars = 
+        {
+            greeting : 'Hello World!'
+        };
+
+        return jsx(`<div>{greeting}</div>`, vars);
     };
 
-    render(Foo, document.getElementById('app'));
+    const FunctionalCompVar = function(props)
+    {
+        const [count, setCount] = useState(0);
 
+        let vars = 
+        {
+            greeting : 'Hello World!'
+        };
+
+        return jsx(`<div>{greeting}</div>`, vars);
+    };
+
+    function genCar()
+    {
+
+    }
+
+    function Car()
+    {
+        const [brand, setBrand] = useState("Ford");
+        const [model, setModel] = useState("Mustang");
+        const [year, setYear]   = useState("1964");
+        const [color, setColor] = useState("red");
+
+        const genCar = function()
+        {
+            setBrand('Holden');
+            setModel('Commodore');
+            setYear('1999');
+            setColor('yellow');
+        };
+
+        const vars = 
+        {
+            brand  : brand,
+            model  : model,
+            year   : year,
+            color  : color,
+            genCar : genCar 
+        };
+
+        return jsx(`
+            <div>
+                <h1>My {brand}</h1>
+                <p>
+                    It is a {color} {model} from {year}.
+                </p>
+                <button onClick={() => genCar()}>Generate Car</button>
+            </div>`,
+        vars);
+    }
+
+
+    class App extends Component
+    {
+        ArrowFunc = FunctionalCompArrow;
+        FuncFunc  = FunctionalCompVar;
+
+        constructor(props)
+        {
+            super(props);
+        }
+
+        render()
+        {
+             return `
+                <div>
+                    <ArrowFunc />
+                    <FuncFunc />
+                    <Car />
+                </div>
+            `;
+        }
+    }
+
+    render(App, document.getElementById('app'));
 
 })();

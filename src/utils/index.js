@@ -410,21 +410,85 @@ export function is_callable(mixed_var)
  * @param  mixed  mixed_var Variable to evaluate
  * @return bool
  */
-export function is_class(mixed_var, classname)
+export function is_constructable(mixed_var)
 {
+    // Not a function
+    if (typeof mixed_var !== 'function' || mixed_var === null)
+    {
+        return false;
+    }
+
+    // Native arrow functions
+    if (!mixed_var.prototype || !mixed_var.prototype.constructor)
+    {
+        return false;
+    }
+
+    // ES6 class
+    if (is_class(mixed_var, true))
+    {
+        return true;
+    }
+
+    // If prototype is empty 
+    let excludes = ['constructor', '__proto__', '__defineGetter__', '__defineSetter__', 'hasOwnProperty', '__lookupGetter__', '__lookupSetter__', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'toLocaleString', 'valueOf', '__proto__'];
+    let funcs    = Object.getOwnPropertyNames(Object.getPrototypeOf(mixed_var.prototype));
+    let props    = Object.keys(mixed_var.prototype);
+    let keys     = [...funcs, ...props];
+
+    keys = keys.filter(function(key)
+    {
+        return !excludes.includes(key);
+    });
+
+    return keys.length >= 1;
+}
+
+/**
+ * Checks if variable is a class declaration.
+ *
+ * @param  mixed  mixed_var Variable to evaluate
+ * @return bool
+ */
+export function is_class(mixed_var, classname, strict)
+{
+    // is_class(foo, true)
+    if (classname === true || classname === false)
+    {
+        strict = classname;
+        classname = null;
+    }
+    // is_class(foo, 'Bar') || is_class(foo, 'Bar', false)
+    else
+    {
+        strict = typeof strict === 'undefined' ? false : strict;
+    }
+
     if (classname)
     {
         if (typeof mixed_var === 'function')
         {
             let re = new RegExp('^\\s*class\\s+(' + classname + '(\\s+|\\{)|\\w+\\s+extends\\s+' + classname + ')', 'i');
 
-            return re.test(mixed_var.toString());
+            let regRet = re.test(mixed_var.toString());
+
+            if (strict)
+            {
+                return regRet;
+            }
+            
+            return is_constructable(mixed_var) && mixed_var.name === classname;
         }
 
         return false;
     }
 
-    return typeof mixed_var === 'function' && /^\s*class\s+/.test(mixed_var.toString());
+    if (strict)
+    {
+        return typeof mixed_var === 'function' && /^\s*class\s+/.test(mixed_var.toString());
+    }
+
+    return is_constructable(mixed_var);
 }
 
 /**
@@ -754,7 +818,7 @@ function cloneObj(obj)
 
     // Handle classes or functions/objects (functions that return this)
     let ret      = constructorClone(obj);
-    let excludes = ['constructor', '__proto__', '__defineGetter__', '__defineSetter__', 'hasOwnProperty', '__lookupGetter__', '__lookupSetter__', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'valueOf', '__proto__'];
+    let excludes = ['constructor', '__proto__', '__defineGetter__', '__defineSetter__', 'hasOwnProperty', '__lookupGetter__', '__lookupSetter__', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'toLocaleString', 'valueOf', '__proto__'];
     let funcs    = Object.getOwnPropertyNames(Object.getPrototypeOf(obj));
     let props    = Object.keys(obj);
     let keys     = [...funcs, ...props];
@@ -1043,6 +1107,7 @@ const _ = {
     is_equal,
     is_htmlElement,
     is_callable,
+    is_constructable,
     is_class,
     callable_name,
     is_null,

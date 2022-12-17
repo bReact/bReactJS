@@ -1,27 +1,4 @@
 export { createElement } from './element';
-export { thunkRender, thunkInstantiate, thunkUpdate } from './thunk';
-export {
-	patchVnode,
-	isMounted,
-	isFragment,
-	isThunk,
-	isNative,
-	isText,
-	isEmpty,
-	noChildren,
-	singleChild,
-	patchVnodes,
-	isThunkInstantiated,
-	isSameThunk,
-	isSameFragment,
-	isNestingFragment,
-	parentElem,
-	thunkName,
-	nodeWillUnmount,
-	nodeElem,
-	nodeElemParent,
-	childDomIndex,
-	nodeComponent,
-	pointVnodeThunk,
-	nodeAttributes,
-} from './element';
+export * from './func';
+export * from './thunk';
+export * from './utils';
