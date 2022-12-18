@@ -81,7 +81,7 @@ function jsxFactory(component)
     return result;
 }
 
-function renderContext(component)
+export function renderContext(component)
 {
     let ret   = {};
     let props = _.object_props(component);

@@ -1,5 +1,5 @@
 import { isEmpty, isFragment } from './utils';
-import { componentFactory } from '../component/index';
+import { functionalComponent } from '../compat/index';
 import _ from '../utils/index';
 
 /**
@@ -249,7 +249,7 @@ function createThunkElement(fn, props, children, key, ref)
 
 function createFunctionalThunk(fn, props, children, key, ref)
 {
-    let func = componentFactory(fn);
+    let func = functionalComponent(fn);
 
     return {
         type: 'thunk',

@@ -1564,550 +1564,6 @@ let nodeWillUnmount = (vnode) =>
         });
     }
 }
-;// CONCATENATED MODULE: ./src/component/index.js
-
-
-
-/**
- * Base component
- * 
- * static getDerivedStateFromProps()
- * componentDidMount()
- * componentWillUnmount()
- * componentWillReceiveProps(nextProps)
- * getSnapshotBeforeUpdate(prevProps, prevState)
- * shouldComponentUpdate(nextProps, nextState)
- * componentWillUpdate(changedProps, changedState)
- * componentDidUpdate(prevProps, prevState, snapshot)
- * componentDidCatch()
- * @class
- */
-class Component
-{
-    /**
-     * Context.
-     *
-     * @var {object}
-     */
-    context = {};
-
-    /**
-     * props.
-     *
-     * @var {object}
-     */
-    props = {};
-
-    /**
-     * Reference to DOM node.
-     *
-     * @var {object}
-     */
-    refs = {};
-
-    /**
-     * State obj
-     *
-     * @var {object}
-     */
-    state = {};
-
-    /**
-     * Default props.
-     *
-     * @var {object}
-     */
-    defaultProps = {};
-
-    /**
-     * Internal use
-     *
-     * @var {object}
-     */
-    __internals = 
-    {
-        vnode     : null,
-        prevState : {},
-        prevProps : {},
-    };
-
-    /**
-     * Constructor
-     *
-     */
-    constructor(props)
-    {
-        this.props = !utils.is_object(props) ? {} : props;
-    }
-
-    setState(key, value, callback)
-    {
-        if (!utils.is_object(this.state))
-        {
-            this.state = {};
-        }
-
-        let stateChanges = {};
-
-        // setState({ 'foo.bar' : 'foo' })
-        if (arguments.length === 1)
-        {
-            if (!utils.is_object(key))
-            {
-                throw new Error('StateError: State should be an object with [dot.notation] keys. e.g. [setState({"foo.bar" : "baz"})]');
-            }
-
-            stateChanges = key;
-        }
-        else
-        {
-            stateChanges[key] = value;
-        }
-
-        this.__internals.prevState = utils.cloneDeep(this.state);
-
-        utils.foreach(stateChanges, function(key, value)
-        {
-            utils.array_set(key, value, this.state);
-            
-        }, this);
-
-        if (!utils.is_equal(this.state, this.__internals.prevState))
-        {
-            thunkUpdate(this.__internals.vnode);
-        }
-    }
-
-    getState(key)
-    {
-        return array_get(key, this.state);
-    }
-
-    jsx(jsx)
-    {
-        const context = renderContext(this);
-
-        return parseJSX(jsx, {...context, this: this});
-    }
-
-    forceUpdate()
-    {
-        thunkUpdate(this.__internals.vnode);
-    }
-}
-
-/**
- * Fragment component
- * 
- * @class
- */
-class Fragment extends Component
-{    
-    constructor(props)
-    {
-        super(props);
-    }
-}
-
-class HooksWrapper extends Component
-{
-    hookIndex;
-    hooks = [];
-    hookDeps = [];
-
-    constructor(render, props)
-    {
-        super(props);
-
-        this.__internals._fn = render;
-    }
-
-    render()
-    {
-        const prevContext = currentComponent;
-
-        try
-        {
-            currentComponent = this;
-
-            this.hookIndex = 0;
-
-            return this.__internals._fn(this.props);
-
-        }
-        finally
-        {
-            currentComponent = prevContext;
-        }
-    }
-}
-
-/**
- * Functional component callback
- * 
- * @class
- */
-function componentFactory(fn)
-{   
-    const factory = function(props)
-    {
-        let component = new HooksWrapper(fn, props);
-
-        return component;
-    }
-
-    return factory;
-}
-
-let currentComponent;
-
-function useState(initial)
-{
-    const i = currentComponent.hookIndex++;
-    
-    if (!currentComponent.hooks[i])
-    {
-        currentComponent.hooks[i] =
-        {
-            state: transformState(initial)
-        };
-    }
-    
-    const thisHookContext = currentComponent;
-    
-    return [
-        currentComponent.hooks[i].state,
-        
-        useCallback(newState =>
-        {
-            thisHookContext.hooks[i].state = transformState(newState, thisHookContext.hooks[i].state);
-
-            thisHookContext.setState();
-
-        }, [])
-    ];
-}
-
-function useCallback(cb, deps)
-{
-    return useMemo(() => cb, deps);
-}
-
-function useMemo(factory, deps)
-{
-    const i = currentComponent.hookIndex++;
-    
-    if ( !currentComponent.hooks[i] || !deps || !sameArray(deps, currentComponent.hookDeps[i]))
-    {
-        currentComponent.hooks[i] = factory();
-
-        currentComponent.hookDeps[i] = deps;
-    }
-    
-    return currentComponent.hooks[i];
-}
-
-function transformState(state, prevState)
-{
-    if (typeof state === "function")
-    {
-        return state(prevState);
-    }
-
-    return state;
-}
-
-function sameArray(arr1, arr2)
-{
-    if (arr1.length !== arr2.length)
-    {
-        return false;
-    }
-
-    for (let i = 0; i < arr1.length; ++i)
-    {
-        if (arr1[i] !== arr2[i])
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-/* harmony default export */ const component = ((/* unused pure expression or super */ null && (Component)));
-;// CONCATENATED MODULE: ./src/vdom/element.js
-
-
-
-
-/**
- * This function lets us create virtual nodes using a simple
- * syntax. It is compatible with JSX transforms so you can use
- * JSX to write nodes that will compile to this function.
- *
- * let node = element('div', { id: 'foo' }, [
- *   element('a', { href: 'http://google.com' },
- *     element('span', {}, 'Google'),
- *     element('b', {}, 'Link')
- *   )
- * ])
- */
-function createElement(tag, props, ...children)
-{        
-    if (arguments.length === 0)
-    {
-        return createEmptyElement();
-    }
-
-    let normalizedProps = {},
-        key,
-        ref,
-        i;
-
-    for (i in props)
-    {
-        if (i == 'key') 
-        {
-            key = props[i];
-        }
-        else if (i == 'ref')
-        {
-            ref = props[i];
-        }
-        else
-        {
-            normalizedProps[i] = props[i];
-        }
-    }
-
-    children = typeof children === 'undefined' ? [] : children;
-
-    if (arguments.length > 2)
-    {
-        children = arguments.length > 3 ? [].slice.call(arguments, 2) : children;
-    }
-
-    children = normaliseChildren(children);
-
-    // If a Component VNode, check for and apply defaultProps
-    // Note: type may be undefined in development, must never error here.
-    if (utils.is_callable(tag) && utils.is_object(tag.defaultProps))
-    {
-        for (i in tag.defaultProps)
-        {
-            if (utils.is_undefined(normalizedProps[i]))
-            {
-                normalizedProps[i] = tag.defaultProps[i];
-            }
-        }
-    }
-
-    if (typeof tag === 'function')
-    {
-        if (!utils.is_constructable(tag))
-        {
-            return createFunctionalThunk(tag, normalizedProps, children, key, ref);
-        }
-
-        return createThunkElement(tag, normalizedProps, children, key, ref);
-    }
-
-    return {
-        type: 'native',
-        tagName: tag,
-        attributes: normalizedProps,
-        children,
-        ref,
-        key,
-        __internals:
-        {
-            _domEl: null,
-            _prevAttrs: ''
-        }
-    }
-}
-
-/**
- * Cleans up the array of child elements.
- * - Flattens nested arrays
- * - Flattens nested fragments
- * - Converts raw strings and numbers into vnodes
- * - Filters out undefined elements
- * - Fragments that are nested inside an normal node
- * - are essentially just array containers, so they get flattened here.
- * - if a component returns a fragment however that gets handled
- * - during the commit/patch/create stages.
- */
-
-function normaliseChildren(children, checkKeys)
-{    
-    checkKeys = utils.is_undefined(checkKeys) ? false : checkKeys;
-
-    let fragmentcount = 0;
-
-    var ret = [];
-
-    if (utils.is_array(children))
-    {
-        utils.foreach(children, function(i, vnode)
-        {
-            if (utils.is_null(vnode) || utils.is_undefined(vnode))
-            {
-                ret.push(createEmptyElement());
-            }
-            else if (checkKeys && !vnode.key)
-            {
-                throw new Error('Each child in a list should have a unique "key" prop.')
-            }
-            else if (utils.is_string(vnode) || utils.is_number(vnode))
-            {
-                ret.push(createTextElement(vnode, null));
-            }
-            else if (utils.is_array(vnode))
-            {                
-                let _children = normaliseChildren(vnode, true);
-                
-                utils.array_merge(ret, _children);
-            }
-            else if (isFragment(vnode))
-            {       
-                squashFragment(vnode, ret, fragmentcount);
-
-                fragmentcount++;
-            }
-            else
-            {
-                ret.push(vnode);
-            }
-        });
-    }
-
-    return utils.is_empty(ret) ? [createEmptyElement()] : filterChildren(ret);
-}
-
-function squashFragment(fragment, ret, fCount)
-{
-    let basekey = !fragment.key ? `f_${fCount}` : fragment.key;
-
-    let _children = normaliseChildren(fragment.children, false);
-
-    utils.foreach(_children, function(i, vnode)
-    {
-        vnode.key = `${basekey}|${i}`;
-    });
-    
-    utils.array_merge(ret, _children);
-}
-
-/**
- * If a node comprises of multiple empty children, filter
- * children and return only a single "empty" child
- */
-function filterChildren(children)
-{
-    // Empty
-    let ret = [children[0]];
-
-    utils.foreach(children, function(i, vnode)
-    {
-        if (!isEmpty(vnode))
-        {
-            ret = children;
-
-            return false;
-        }
-    });
-
-    return ret;
-}
-
-/**
- * Text nodes are stored as objects to keep things simple
- */
-
-function createTextElement(text, key)
-{    
-    text = utils.is_string(text) ? text : text + '';
-
-    return {
-        type: 'text',
-        nodeValue: text + '',
-        key : key,
-        __internals:
-        {
-            _domEl: null
-        }
-    }
-}
-
-/**
- * Text nodes are stored as objects to keep things simple
- */
-
-function createEmptyElement()
-{
-    return {
-        type: 'empty',
-        key: null,
-        __internals:
-        {
-            _domEl: null
-        }
-    }
-}
-
-/**
- * Lazily-rendered virtual nodes
- */
-
-function createThunkElement(fn, props, children, key, ref)
-{
-    let _type = utils.is_class(fn, 'Fragment') ? 'fragment' : 'thunk';
-
-    return {
-        type: _type,
-        fn,
-        children,
-        props,
-        key,
-        __internals:
-        {
-            _domEl: null,
-            _component: null,
-            _name : utils.callable_name(fn),
-            _fn : null,
-            _hooks : [],
-        }
-    }
-}
-
-/**
- * Lazily-rendered virtual nodes
- */
-
-function createFunctionalThunk(fn, props, children, key, ref)
-{
-    let func = componentFactory(fn);
-
-    return {
-        type: 'thunk',
-        fn : func,
-        children : null,
-        props,
-        key,
-        __internals:
-        {
-            _domEl: null,
-            _component: null,
-            _name : utils.callable_name(fn),
-            _fn : fn,
-            _hooks : [],
-        }
-    }
-}
-
-/* harmony default export */ const vdom_element = ((/* unused pure expression or super */ null && (createElement)));
 ;// CONCATENATED MODULE: ./src/jsx/Parser.js
 function oneObject(str) {
     var obj = {}
@@ -2745,7 +2201,7 @@ innerClass.prototype =
 
 
 
-function jsx_parseJSX(jsx, obj, config)
+function parseJSX(jsx, obj, config)
 {
 	return evaluate(jsx, obj, config);
 }
@@ -2759,6 +2215,561 @@ function jsx(str, vars)
 
 	return evaluate(str, vars);
 }
+;// CONCATENATED MODULE: ./src/compat/Component.js
+
+
+
+
+/**
+ * Base component
+ * 
+ * static getDerivedStateFromProps()
+ * componentDidMount()
+ * componentWillUnmount()
+ * componentWillReceiveProps(nextProps)
+ * getSnapshotBeforeUpdate(prevProps, prevState)
+ * shouldComponentUpdate(nextProps, nextState)
+ * componentWillUpdate(changedProps, changedState)
+ * componentDidUpdate(prevProps, prevState, snapshot)
+ * componentDidCatch()
+ * @class
+ */
+class Component
+{
+    /**
+     * Context.
+     *
+     * @var {object}
+     */
+    context = {};
+
+    /**
+     * props.
+     *
+     * @var {object}
+     */
+    props = {};
+
+    /**
+     * Reference to DOM node.
+     *
+     * @var {object}
+     */
+    refs = {};
+
+    /**
+     * State obj
+     *
+     * @var {object}
+     */
+    state = {};
+
+    /**
+     * Default props.
+     *
+     * @var {object}
+     */
+    defaultProps = {};
+
+    /**
+     * Internal use
+     *
+     * @var {object}
+     */
+    __internals = 
+    {
+        vnode     : null,
+        prevState : {},
+        prevProps : {},
+    };
+
+    /**
+     * Constructor
+     *
+     */
+    constructor(props)
+    {
+        this.props = !utils.is_object(props) ? {} : props;
+    }
+
+    setState(key, value, callback)
+    {
+        if (!utils.is_object(this.state))
+        {
+            this.state = {};
+        }
+
+        let stateChanges = {};
+
+        // setState({ 'foo.bar' : 'foo' })
+        if (arguments.length === 1)
+        {
+            if (!utils.is_object(key))
+            {
+                throw new Error('StateError: State should be an object with [dot.notation] keys. e.g. [setState({"foo.bar" : "baz"})]');
+            }
+
+            stateChanges = key;
+        }
+        else
+        {
+            stateChanges[key] = value;
+        }
+
+        this.__internals.prevState = utils.cloneDeep(this.state);
+
+        utils.foreach(stateChanges, function(key, value)
+        {
+            utils.array_set(key, value, this.state);
+            
+        }, this);
+
+        if (!utils.is_equal(this.state, this.__internals.prevState))
+        {
+            thunkUpdate(this.__internals.vnode);
+        }
+    }
+
+    getState(key)
+    {
+        return array_get(key, this.state);
+    }
+
+    jsx(jsx)
+    {
+        const context = renderContext(this);
+
+        return parseJSX(jsx, {...context, this: this});
+    }
+
+    forceUpdate()
+    {
+        thunkUpdate(this.__internals.vnode);
+    }
+}
+;// CONCATENATED MODULE: ./src/compat/Fragment.js
+
+
+/**
+ * Fragment component
+ * 
+ * @class
+ */
+class Fragment extends Component
+{    
+    constructor(props)
+    {
+        super(props);
+    }
+}
+;// CONCATENATED MODULE: ./src/compat/hooks.js
+
+let currentComponent;
+
+function useState(initial)
+{
+    const i = currentComponent.hookIndex++;
+    
+    if (!currentComponent.hooks[i])
+    {
+        currentComponent.hooks[i] =
+        {
+            state: transformState(initial)
+        };
+    }
+    
+    const thisHookContext = currentComponent;
+    
+    return [
+        currentComponent.hooks[i].state,
+        
+        useCallback(newState =>
+        {
+            thisHookContext.hooks[i].state = transformState(newState, thisHookContext.hooks[i].state);
+
+            thisHookContext.setState();
+
+        }, [])
+    ];
+}
+
+function useCallback(cb, deps)
+{
+    return useMemo(() => cb, deps);
+}
+
+function useMemo(factory, deps)
+{
+    const i = currentComponent.hookIndex++;
+    
+    if ( !currentComponent.hooks[i] || !deps || !sameArray(deps, currentComponent.hookDeps[i]))
+    {
+        currentComponent.hooks[i] = factory();
+
+        currentComponent.hookDeps[i] = deps;
+    }
+    
+    return currentComponent.hooks[i];
+}
+
+function transformState(state, prevState)
+{
+    if (typeof state === "function")
+    {
+        return state(prevState);
+    }
+
+    return state;
+}
+
+function sameArray(arr1, arr2)
+{
+    if (arr1.length !== arr2.length)
+    {
+        return false;
+    }
+
+    for (let i = 0; i < arr1.length; ++i)
+    {
+        if (arr1[i] !== arr2[i])
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+;// CONCATENATED MODULE: ./src/compat/functionalComponent.js
+
+
+
+class FunctionalComponent extends Component
+{
+    hookIndex;
+    hooks = [];
+    hookDeps = [];
+
+    constructor(render, props)
+    {
+        super(props);
+
+        this.__internals._fn = render;
+    }
+
+    render()
+    {
+        const prevContext = currentComponent;
+
+        try
+        {
+            currentComponent = this;
+
+            this.hookIndex = 0;
+
+            return this.__internals._fn(this.props);
+
+        }
+        finally
+        {
+            currentComponent = prevContext;
+        }
+    }
+}
+
+/**
+ * Functional component callback
+ * 
+ * @class
+ */
+function functionalComponent(fn)
+{   
+    const factory = function(props)
+    {
+        let component = new FunctionalComponent(fn, props);
+
+        return component;
+    }
+
+    return factory;
+}
+
+;// CONCATENATED MODULE: ./src/compat/index.js
+
+
+
+
+;// CONCATENATED MODULE: ./src/vdom/element.js
+
+
+
+
+/**
+ * This function lets us create virtual nodes using a simple
+ * syntax. It is compatible with JSX transforms so you can use
+ * JSX to write nodes that will compile to this function.
+ *
+ * let node = element('div', { id: 'foo' }, [
+ *   element('a', { href: 'http://google.com' },
+ *     element('span', {}, 'Google'),
+ *     element('b', {}, 'Link')
+ *   )
+ * ])
+ */
+function createElement(tag, props, ...children)
+{        
+    if (arguments.length === 0)
+    {
+        return createEmptyElement();
+    }
+
+    let normalizedProps = {},
+        key,
+        ref,
+        i;
+
+    for (i in props)
+    {
+        if (i == 'key') 
+        {
+            key = props[i];
+        }
+        else if (i == 'ref')
+        {
+            ref = props[i];
+        }
+        else
+        {
+            normalizedProps[i] = props[i];
+        }
+    }
+
+    children = typeof children === 'undefined' ? [] : children;
+
+    if (arguments.length > 2)
+    {
+        children = arguments.length > 3 ? [].slice.call(arguments, 2) : children;
+    }
+
+    children = normaliseChildren(children);
+
+    // If a Component VNode, check for and apply defaultProps
+    // Note: type may be undefined in development, must never error here.
+    if (utils.is_callable(tag) && utils.is_object(tag.defaultProps))
+    {
+        for (i in tag.defaultProps)
+        {
+            if (utils.is_undefined(normalizedProps[i]))
+            {
+                normalizedProps[i] = tag.defaultProps[i];
+            }
+        }
+    }
+
+    if (typeof tag === 'function')
+    {
+        if (!utils.is_constructable(tag))
+        {
+            return createFunctionalThunk(tag, normalizedProps, children, key, ref);
+        }
+
+        return createThunkElement(tag, normalizedProps, children, key, ref);
+    }
+
+    return {
+        type: 'native',
+        tagName: tag,
+        attributes: normalizedProps,
+        children,
+        ref,
+        key,
+        __internals:
+        {
+            _domEl: null,
+            _prevAttrs: ''
+        }
+    }
+}
+
+/**
+ * Cleans up the array of child elements.
+ * - Flattens nested arrays
+ * - Flattens nested fragments
+ * - Converts raw strings and numbers into vnodes
+ * - Filters out undefined elements
+ * - Fragments that are nested inside an normal node
+ * - are essentially just array containers, so they get flattened here.
+ * - if a component returns a fragment however that gets handled
+ * - during the commit/patch/create stages.
+ */
+
+function normaliseChildren(children, checkKeys)
+{    
+    checkKeys = utils.is_undefined(checkKeys) ? false : checkKeys;
+
+    let fragmentcount = 0;
+
+    var ret = [];
+
+    if (utils.is_array(children))
+    {
+        utils.foreach(children, function(i, vnode)
+        {
+            if (utils.is_null(vnode) || utils.is_undefined(vnode))
+            {
+                ret.push(createEmptyElement());
+            }
+            else if (checkKeys && !vnode.key)
+            {
+                throw new Error('Each child in a list should have a unique "key" prop.')
+            }
+            else if (utils.is_string(vnode) || utils.is_number(vnode))
+            {
+                ret.push(createTextElement(vnode, null));
+            }
+            else if (utils.is_array(vnode))
+            {                
+                let _children = normaliseChildren(vnode, true);
+                
+                utils.array_merge(ret, _children);
+            }
+            else if (isFragment(vnode))
+            {       
+                squashFragment(vnode, ret, fragmentcount);
+
+                fragmentcount++;
+            }
+            else
+            {
+                ret.push(vnode);
+            }
+        });
+    }
+
+    return utils.is_empty(ret) ? [createEmptyElement()] : filterChildren(ret);
+}
+
+function squashFragment(fragment, ret, fCount)
+{
+    let basekey = !fragment.key ? `f_${fCount}` : fragment.key;
+
+    let _children = normaliseChildren(fragment.children, false);
+
+    utils.foreach(_children, function(i, vnode)
+    {
+        vnode.key = `${basekey}|${i}`;
+    });
+    
+    utils.array_merge(ret, _children);
+}
+
+/**
+ * If a node comprises of multiple empty children, filter
+ * children and return only a single "empty" child
+ */
+function filterChildren(children)
+{
+    // Empty
+    let ret = [children[0]];
+
+    utils.foreach(children, function(i, vnode)
+    {
+        if (!isEmpty(vnode))
+        {
+            ret = children;
+
+            return false;
+        }
+    });
+
+    return ret;
+}
+
+/**
+ * Text nodes are stored as objects to keep things simple
+ */
+
+function createTextElement(text, key)
+{    
+    text = utils.is_string(text) ? text : text + '';
+
+    return {
+        type: 'text',
+        nodeValue: text + '',
+        key : key,
+        __internals:
+        {
+            _domEl: null
+        }
+    }
+}
+
+/**
+ * Text nodes are stored as objects to keep things simple
+ */
+
+function createEmptyElement()
+{
+    return {
+        type: 'empty',
+        key: null,
+        __internals:
+        {
+            _domEl: null
+        }
+    }
+}
+
+/**
+ * Lazily-rendered virtual nodes
+ */
+
+function createThunkElement(fn, props, children, key, ref)
+{
+    let _type = utils.is_class(fn, 'Fragment') ? 'fragment' : 'thunk';
+
+    return {
+        type: _type,
+        fn,
+        children,
+        props,
+        key,
+        __internals:
+        {
+            _domEl: null,
+            _component: null,
+            _name : utils.callable_name(fn),
+            _fn : null,
+            _hooks : [],
+        }
+    }
+}
+
+/**
+ * Lazily-rendered virtual nodes
+ */
+
+function createFunctionalThunk(fn, props, children, key, ref)
+{
+    let func = functionalComponent(fn);
+
+    return {
+        type: 'thunk',
+        fn : func,
+        children : null,
+        props,
+        key,
+        __internals:
+        {
+            _domEl: null,
+            _component: null,
+            _name : utils.callable_name(fn),
+            _fn : fn,
+            _hooks : [],
+        }
+    }
+}
+
+/* harmony default export */ const vdom_element = ((/* unused pure expression or super */ null && (createElement)));
 ;// CONCATENATED MODULE: ./src/vdom/actions.js
 
 
@@ -3321,9 +3332,9 @@ function jsxFactory(component)
         return createElement();
     }
 
-    const context = thunk_renderContext(component);
+    const context = renderContext(component);
 
-    const result = jsx_parseJSX(jsx, {...context, this: component });
+    const result = parseJSX(jsx, {...context, this: component });
 
     if (utils.is_array(result))
     {
@@ -3333,7 +3344,7 @@ function jsxFactory(component)
     return result;
 }
 
-function thunk_renderContext(component)
+function renderContext(component)
 {
     let ret   = {};
     let props = utils.object_props(component);
