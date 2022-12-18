@@ -1,4 +1,4 @@
-import { render, Component, createElement, Fragment, jsx } from './src/index';
+import { render, Component, createElement, Fragment, jsx, useState } from './src/index';
 
 (function()
 {
@@ -319,10 +319,18 @@ import { render, Component, createElement, Fragment, jsx } from './src/index';
 
     const FunctionalCompArrow = (props) =>
     {
+        const [greeting, setGreeting] = useState('Hello World!');
+
         let vars = 
         {
-            greeting : 'Hello World!'
+            greeting : greeting
         };
+
+       /* setTimeout(function()
+        {            
+            setGreeting('Updated!');
+
+        }, 1000);*/
 
         return jsx(`<div>{greeting}</div>`, vars);
     };
@@ -331,7 +339,7 @@ import { render, Component, createElement, Fragment, jsx } from './src/index';
     {
         let vars = 
         {
-            greeting : 'Hello World!'
+            greeting : props.testProp
         };
 
         return jsx(`<div>{greeting}</div>`, vars);
@@ -382,18 +390,29 @@ import { render, Component, createElement, Fragment, jsx } from './src/index';
     {
         ArrowFunc = FunctionalCompArrow;
         FuncFunc  = FunctionalCompVar;
+        passProp  = 'Hello';
 
         constructor(props)
         {
             super(props);
+
+            let _this = this;
+
+            setTimeout(function()
+            {            
+                _this.passProp = 'Updated!';
+
+                _this.forceUpdate();
+
+            }, 2000);
         }
 
         render()
         {
              return `
                 <div>
-                    <ArrowFunc />
-                    <FuncFunc />
+                    <ArrowFunc testProp={this.passProp} />
+                    <FuncFunc testProp={this.passProp} />
                 </div>
             `;
         }

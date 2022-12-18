@@ -28,6 +28,43 @@ function createNativeElement(tag)
     return isSvg(tag) ? document.createElementNS('http://www.w3.org/2000/svg', tag) : document.createElement(tag);
 }
 ;// CONCATENATED MODULE: ./src/utils/index.js
+const _wMap = function()
+{
+    return this;
+}
+
+_wMap.prototype = {};
+
+_wMap.prototype.set = function(key, value)
+{
+    array_set(key, value, this);
+};
+
+_wMap.prototype.get = function(key)
+{
+    return utils_array_get(key, this);
+};
+
+_wMap.prototype.delete = function(key)
+{
+    array_delete(key, this);
+};
+
+_wMap.prototype.isset = function(key)
+{
+    return array_has(key, this);
+};
+
+/**
+ * Returns an immutable object with set,get,isset, delete methods that accept dot.notation
+ *
+ * @return {_wMap}
+ */
+function wMap()
+{
+    return new _wMap;
+}
+
 /**
  * Returns var if set
  *
@@ -461,17 +498,9 @@ function is_constructable(mixed_var)
     }
 
     // If prototype is empty 
-    let excludes = ['constructor', '__proto__', '__defineGetter__', '__defineSetter__', 'hasOwnProperty', '__lookupGetter__', '__lookupSetter__', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'toLocaleString', 'valueOf', '__proto__'];
-    let funcs    = Object.getOwnPropertyNames(Object.getPrototypeOf(mixed_var.prototype));
-    let props    = Object.keys(mixed_var.prototype);
-    let keys     = [...funcs, ...props];
+    let props = object_props(mixed_var.prototype);
 
-    keys = keys.filter(function(key)
-    {
-        return !excludes.includes(key);
-    });
-
-    return keys.length >= 1;
+    return props.length >= 1;
 }
 
 /**
@@ -529,7 +558,8 @@ function is_class(mixed_var, classname, strict)
  */
 function callable_name(mixed_var)
 {
-    if (is_class(mixed_var))
+    // Strict ES6
+    if (is_class(mixed_var, true))
     {
         return mixed_var.toString().match(/^\s*class\s+\w+/)[0].replace('class', '').trim();
     }
@@ -740,6 +770,31 @@ function is_bool(mixed_var)
 }
 
 /**
+ * Returns object properties as array of keys
+ * 
+ * @param  mixed mixed_var Variable to test
+ * @return bool
+ */
+function object_props(mixed_var)
+{
+    if (!is_object(mixed_var))
+    {
+        return [];
+    }
+
+    // If prototype is empty 
+    let excludes = ['constructor', '__proto__', '__defineGetter__', '__defineSetter__', 'hasOwnProperty', '__lookupGetter__', '__lookupSetter__', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'toLocaleString', 'valueOf'];
+    let funcs    = Object.getOwnPropertyNames(Object.getPrototypeOf(mixed_var));
+    let props    = Object.keys(mixed_var);
+    let keys     = [...funcs, ...props];
+
+    return keys.filter(function(key)
+    {
+        return !excludes.includes(key);
+    });
+}
+
+/**
  * Is empty
  * 
  * @param  mixed mixed_var Variable to test
@@ -747,7 +802,11 @@ function is_bool(mixed_var)
  */
 function is_empty(mixed_var)
 {
-    if (is_string(mixed_var))
+    if (mixed_var === false || mixed_var === null || (typeof mixed_var === 'undefined'))
+    {
+        return true;
+    }
+    else if (is_string(mixed_var))
     {
         return mixed_var.trim() === '';
     }
@@ -762,10 +821,6 @@ function is_empty(mixed_var)
     else if (is_object(mixed_var))
     {
         return Object.keys(mixed_var).length === 0;
-    }
-    else if (mixed_var === false || mixed_var === null || (typeof mixed_var === 'undefined'))
-    {
-        return true;
     }
 
     return false;
@@ -845,20 +900,12 @@ function cloneObj(obj)
     }
 
     // Loop
-
-    // Handle classes or functions/objects (functions that return this)
-    let ret      = constructorClone(obj);
-    let excludes = ['constructor', '__proto__', '__defineGetter__', '__defineSetter__', 'hasOwnProperty', '__lookupGetter__', '__lookupSetter__', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'toLocaleString', 'valueOf', '__proto__'];
-    let funcs    = Object.getOwnPropertyNames(Object.getPrototypeOf(obj));
-    let props    = Object.keys(obj);
-    let keys     = [...funcs, ...props];
+    let keys = object_props(obj);
+    let ret  = {};
 
     foreach(keys, function(i, key)
     {
-        if (!excludes.includes(key) && obj.hasOwnProperty(key))
-        {
-            ret[key] = cloneDeep(obj[key], ret);
-        }        
+        ret[key] = cloneDeep(obj[key], ret);     
     });
     
     return ret;
@@ -1121,6 +1168,7 @@ function map(obj, callback, args)
 
 
 const utils_ = {
+    wMap,
     isset,
     triggerEvent,
     foreach,
@@ -1139,6 +1187,7 @@ const utils_ = {
     is_callable,
     is_constructable,
     is_class,
+    object_props,
     callable_name,
     is_null,
     is_undefined,
@@ -1218,7 +1267,13 @@ let singleChild = (node) =>
 
 let isSameThunk = (left, right) =>
 {
-    return isThunk(left) && isThunk(right) && left.fn === right.fn;
+    // Functional component
+    if (left.__internals._fn || right.__internals._fn)
+    {
+        return left.__internals._name === right.__internals._name && left.__internals._fn === right.__internals._fn;
+    }
+
+    return left.fn === right.fn && left.__internals._name === right.__internals._name;
 }
 
 let isThunkInstantiated = (vnode) =>
@@ -1654,17 +1709,12 @@ class Fragment extends Component
     }
 }
 
-/**
- * Functional component
- * 
- * @class
- */
-class Factory extends Component
+class HooksWrapper extends Component
 {
-    /**
-     * Constructor
-     *
-     */
+    hookIndex;
+    hooks = [];
+    hookDeps = [];
+
     constructor(render, props)
     {
         super(props);
@@ -1674,7 +1724,21 @@ class Factory extends Component
 
     render()
     {
-        return this.__internals._fn(this.props);
+        const prevContext = currentComponent;
+
+        try
+        {
+            currentComponent = this;
+
+            this.hookIndex = 0;
+
+            return this.__internals._fn(this.props);
+
+        }
+        finally
+        {
+            currentComponent = prevContext;
+        }
     }
 }
 
@@ -1687,12 +1751,88 @@ function componentFactory(fn)
 {   
     const factory = function(props)
     {
-        let component = new Factory(fn, props);
+        let component = new HooksWrapper(fn, props);
 
         return component;
     }
 
     return factory;
+}
+
+let currentComponent;
+
+function useState(initial)
+{
+    const i = currentComponent.hookIndex++;
+    
+    if (!currentComponent.hooks[i])
+    {
+        currentComponent.hooks[i] =
+        {
+            state: transformState(initial)
+        };
+    }
+    
+    const thisHookContext = currentComponent;
+    
+    return [
+        currentComponent.hooks[i].state,
+        
+        useCallback(newState =>
+        {
+            thisHookContext.hooks[i].state = transformState(newState, thisHookContext.hooks[i].state);
+
+            thisHookContext.setState();
+
+        }, [])
+    ];
+}
+
+function useCallback(cb, deps)
+{
+    return useMemo(() => cb, deps);
+}
+
+function useMemo(factory, deps)
+{
+    const i = currentComponent.hookIndex++;
+    
+    if ( !currentComponent.hooks[i] || !deps || !sameArray(deps, currentComponent.hookDeps[i]))
+    {
+        currentComponent.hooks[i] = factory();
+
+        currentComponent.hookDeps[i] = deps;
+    }
+    
+    return currentComponent.hooks[i];
+}
+
+function transformState(state, prevState)
+{
+    if (typeof state === "function")
+    {
+        return state(prevState);
+    }
+
+    return state;
+}
+
+function sameArray(arr1, arr2)
+{
+    if (arr1.length !== arr2.length)
+    {
+        return false;
+    }
+
+    for (let i = 0; i < arr1.length; ++i)
+    {
+        if (arr1[i] !== arr2[i])
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /* harmony default export */ const component = ((/* unused pure expression or super */ null && (Component)));
@@ -1935,7 +2075,9 @@ function createThunkElement(fn, props, children, key, ref)
         {
             _domEl: null,
             _component: null,
-            _name : utils.callable_name(fn)
+            _name : utils.callable_name(fn),
+            _fn : null,
+            _hooks : [],
         }
     }
 }
@@ -1958,7 +2100,9 @@ function createFunctionalThunk(fn, props, children, key, ref)
         {
             _domEl: null,
             _component: null,
-            _name : utils.callable_name(fn)
+            _name : utils.callable_name(fn),
+            _fn : fn,
+            _hooks : [],
         }
     }
 }
@@ -2727,7 +2871,7 @@ function patchNative(left, right, actions)
 }
 
 function patchThunk(left, right, actions)
-{        
+{ 
     // Same component 
     if (isSameThunk(left, right))
     {        
@@ -2740,7 +2884,7 @@ function patchThunk(left, right, actions)
     {
         let component = thunkInstantiate(right);
 
-        pointVnodeThunk(vnode, component);
+        pointVnodeThunk(right, component);
 
         actions.push(action('replaceNode', [left, right]));
     }
@@ -3191,17 +3335,14 @@ function jsxFactory(component)
 
 function thunk_renderContext(component)
 {
-    const exclude = ['constructor', 'render'];
-    const funcs   = Object.getOwnPropertyNames(Object.getPrototypeOf(component));
-    const props   = Object.keys(component);
-    const keys    = [...funcs, ...props];
-    let   ret     = {};
+    let ret   = {};
+    let props = utils.object_props(component);
 
-    utils.foreach(keys, function(i, key)
+    utils.foreach(props, function(i, prop)
     {
-        if (!exclude.includes(key))
+        if (prop !== 'render')
         {
-            ret[key] = component[key];
+            ret[prop] = component[prop];
         }
     });
 
@@ -4627,10 +4768,18 @@ function mount(DOMElement, parent)
 
     const FunctionalCompArrow = (props) =>
     {
+        const [greeting, setGreeting] = useState('Hello World!');
+
         let vars = 
         {
-            greeting : 'Hello World!'
+            greeting : greeting
         };
+
+       /* setTimeout(function()
+        {            
+            setGreeting('Updated!');
+
+        }, 1000);*/
 
         return jsx(`<div>{greeting}</div>`, vars);
     };
@@ -4639,7 +4788,7 @@ function mount(DOMElement, parent)
     {
         let vars = 
         {
-            greeting : 'Hello World!'
+            greeting : props.testProp
         };
 
         return jsx(`<div>{greeting}</div>`, vars);
@@ -4690,18 +4839,29 @@ function mount(DOMElement, parent)
     {
         ArrowFunc = FunctionalCompArrow;
         FuncFunc  = FunctionalCompVar;
+        passProp  = 'Hello';
 
         constructor(props)
         {
             super(props);
+
+            let _this = this;
+
+            setTimeout(function()
+            {            
+                _this.passProp = 'Updated!';
+
+                _this.forceUpdate();
+
+            }, 2000);
         }
 
         render()
         {
              return `
                 <div>
-                    <ArrowFunc />
-                    <FuncFunc />
+                    <ArrowFunc testProp={this.passProp} />
+                    <FuncFunc testProp={this.passProp} />
                 </div>
             `;
         }

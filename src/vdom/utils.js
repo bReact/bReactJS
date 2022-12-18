@@ -63,7 +63,13 @@ export let singleChild = (node) =>
 
 export let isSameThunk = (left, right) =>
 {
-    return isThunk(left) && isThunk(right) && left.fn === right.fn;
+    // Functional component
+    if (left.__internals._fn || right.__internals._fn)
+    {
+        return left.__internals._name === right.__internals._name && left.__internals._fn === right.__internals._fn;
+    }
+
+    return left.fn === right.fn && left.__internals._name === right.__internals._name;
 }
 
 export let isThunkInstantiated = (vnode) =>

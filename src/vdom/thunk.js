@@ -83,17 +83,14 @@ function jsxFactory(component)
 
 function renderContext(component)
 {
-    const exclude = ['constructor', 'render'];
-    const funcs   = Object.getOwnPropertyNames(Object.getPrototypeOf(component));
-    const props   = Object.keys(component);
-    const keys    = [...funcs, ...props];
-    let   ret     = {};
+    let ret   = {};
+    let props = _.object_props(component);
 
-    _.foreach(keys, function(i, key)
+    _.foreach(props, function(i, prop)
     {
-        if (!exclude.includes(key))
+        if (prop !== 'render')
         {
-            ret[key] = component[key];
+            ret[prop] = component[prop];
         }
     });
 

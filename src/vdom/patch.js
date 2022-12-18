@@ -85,7 +85,7 @@ function patchNative(left, right, actions)
 }
 
 function patchThunk(left, right, actions)
-{        
+{ 
     // Same component 
     if (vElem.isSameThunk(left, right))
     {        
@@ -98,7 +98,7 @@ function patchThunk(left, right, actions)
     {
         let component = thunk.thunkInstantiate(right);
 
-        vElem.pointVnodeThunk(vnode, component);
+        vElem.pointVnodeThunk(right, component);
 
         actions.push(action('replaceNode', [left, right]));
     }

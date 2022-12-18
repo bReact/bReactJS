@@ -1,3 +1,40 @@
+const _wMap = function()
+{
+    return this;
+}
+
+_wMap.prototype = {};
+
+_wMap.prototype.set = function(key, value)
+{
+    array_set(key, value, this);
+};
+
+_wMap.prototype.get = function(key)
+{
+    return array_get(key, this);
+};
+
+_wMap.prototype.delete = function(key)
+{
+    array_delete(key, this);
+};
+
+_wMap.prototype.isset = function(key)
+{
+    return array_has(key, this);
+};
+
+/**
+ * Returns an immutable object with set,get,isset, delete methods that accept dot.notation
+ *
+ * @return {_wMap}
+ */
+export function wMap()
+{
+    return new _wMap;
+}
+
 /**
  * Returns var if set
  *
@@ -431,17 +468,9 @@ export function is_constructable(mixed_var)
     }
 
     // If prototype is empty 
-    let excludes = ['constructor', '__proto__', '__defineGetter__', '__defineSetter__', 'hasOwnProperty', '__lookupGetter__', '__lookupSetter__', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'toLocaleString', 'valueOf', '__proto__'];
-    let funcs    = Object.getOwnPropertyNames(Object.getPrototypeOf(mixed_var.prototype));
-    let props    = Object.keys(mixed_var.prototype);
-    let keys     = [...funcs, ...props];
+    let props = object_props(mixed_var.prototype);
 
-    keys = keys.filter(function(key)
-    {
-        return !excludes.includes(key);
-    });
-
-    return keys.length >= 1;
+    return props.length >= 1;
 }
 
 /**
@@ -499,7 +528,8 @@ export function is_class(mixed_var, classname, strict)
  */
 export function callable_name(mixed_var)
 {
-    if (is_class(mixed_var))
+    // Strict ES6
+    if (is_class(mixed_var, true))
     {
         return mixed_var.toString().match(/^\s*class\s+\w+/)[0].replace('class', '').trim();
     }
@@ -710,6 +740,31 @@ export function is_bool(mixed_var)
 }
 
 /**
+ * Returns object properties as array of keys
+ * 
+ * @param  mixed mixed_var Variable to test
+ * @return bool
+ */
+export function object_props(mixed_var)
+{
+    if (!is_object(mixed_var))
+    {
+        return [];
+    }
+
+    // If prototype is empty 
+    let excludes = ['constructor', '__proto__', '__defineGetter__', '__defineSetter__', 'hasOwnProperty', '__lookupGetter__', '__lookupSetter__', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'toLocaleString', 'valueOf'];
+    let funcs    = Object.getOwnPropertyNames(Object.getPrototypeOf(mixed_var));
+    let props    = Object.keys(mixed_var);
+    let keys     = [...funcs, ...props];
+
+    return keys.filter(function(key)
+    {
+        return !excludes.includes(key);
+    });
+}
+
+/**
  * Is empty
  * 
  * @param  mixed mixed_var Variable to test
@@ -717,7 +772,11 @@ export function is_bool(mixed_var)
  */
 export function is_empty(mixed_var)
 {
-    if (is_string(mixed_var))
+    if (mixed_var === false || mixed_var === null || (typeof mixed_var === 'undefined'))
+    {
+        return true;
+    }
+    else if (is_string(mixed_var))
     {
         return mixed_var.trim() === '';
     }
@@ -732,10 +791,6 @@ export function is_empty(mixed_var)
     else if (is_object(mixed_var))
     {
         return Object.keys(mixed_var).length === 0;
-    }
-    else if (mixed_var === false || mixed_var === null || (typeof mixed_var === 'undefined'))
-    {
-        return true;
     }
 
     return false;
@@ -815,20 +870,12 @@ function cloneObj(obj)
     }
 
     // Loop
-
-    // Handle classes or functions/objects (functions that return this)
-    let ret      = constructorClone(obj);
-    let excludes = ['constructor', '__proto__', '__defineGetter__', '__defineSetter__', 'hasOwnProperty', '__lookupGetter__', '__lookupSetter__', 'isPrototypeOf', 'propertyIsEnumerable', 'toString', 'toLocaleString', 'valueOf', '__proto__'];
-    let funcs    = Object.getOwnPropertyNames(Object.getPrototypeOf(obj));
-    let props    = Object.keys(obj);
-    let keys     = [...funcs, ...props];
+    let keys = object_props(obj);
+    let ret  = {};
 
     foreach(keys, function(i, key)
     {
-        if (!excludes.includes(key) && obj.hasOwnProperty(key))
-        {
-            ret[key] = cloneDeep(obj[key], ret);
-        }        
+        ret[key] = cloneDeep(obj[key], ret);     
     });
     
     return ret;
@@ -1091,6 +1138,7 @@ export function map(obj, callback, args)
 
 
 const _ = {
+    wMap,
     isset,
     triggerEvent,
     foreach,
@@ -1109,6 +1157,7 @@ const _ = {
     is_callable,
     is_constructable,
     is_class,
+    object_props,
     callable_name,
     is_null,
     is_undefined,
